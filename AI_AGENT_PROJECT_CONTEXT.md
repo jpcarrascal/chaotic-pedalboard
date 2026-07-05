@@ -1,8 +1,8 @@
-# MIDI Socket: AI Agent Project Context
+# Chaotic Pedalboard: AI Agent Project Context
 
 ## 1) Project Description
 
-MIDI Socket is a real-time collaborative music web app that currently operates as a MIDI routing bridge between:
+Chaotic Pedalboard (formerly MIDI Socket) is a real-time collaborative music web app that currently operates as a MIDI routing bridge between:
 
 - Remote browser-based Track clients (participants)
 - A host Sequencer client running on a machine with local MIDI interfaces

@@ -1,7 +1,7 @@
 {
-    "name": "MIDI Socket",
+    "name": "chaotic-pedalboard",
     "version": "0.0.1",
-    "description": "Collaborative Step Sequencer",
+    "description": "Chaotic Pedalboard: collaborative MIDI routing bridge",
     "scripts": {
         "test": "jest",
         "test:verbose": "jest --verbose",

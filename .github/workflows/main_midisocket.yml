@@ -1,7 +1,10 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - midisocket
+# App: chaotic-pedalboard (formerly midisocket). Deploys to the Azure App
+# Service still named 'midisocket' — do not change app-name below without
+# also updating the OIDC federated credential and creating the new App Service.
+name: Build and deploy chaotic-pedalboard to Azure Web App - midisocket
 
 on:
   push:

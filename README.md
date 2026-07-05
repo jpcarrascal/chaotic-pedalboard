@@ -1,8 +1,8 @@
-# MIDI Socket - Professional MIDI Routing Bridge
+# Chaotic Pedalboard - Professional MIDI Routing Bridge
 
 🎹 **Transform any device into a custom MIDI controller with professional routing capabilities**
 
-MIDI Socket is a modern web-based MIDI routing system that bridges remote mobile/web interfaces with local MIDI hardware. Create custom device profiles with personalized controllers, route multiple tracks to different MIDI destinations, and enjoy a seamless collaborative music experience.
+Chaotic Pedalboard is a modern web-based MIDI routing system that bridges remote mobile/web interfaces with local MIDI hardware. Create custom device profiles with personalized controllers, route multiple tracks to different MIDI destinations, and enjoy a seamless collaborative music experience.
 
 ## ✨ Key Features
 
@@ -127,7 +127,7 @@ Share: `http://localhost:3000/track?session=yoursession`
 ```
 Remote Track Apps (Mobile/Web)
            ↓
-    MIDI Socket Server
+    Chaotic Pedalboard Server
            ↓
    Custom Device System
            ↓

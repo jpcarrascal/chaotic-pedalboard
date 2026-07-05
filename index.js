@@ -18,7 +18,7 @@ const myFormat = printf(({ level, message, label, timestamp }) => {
 
 const logger = createLogger({
   format: combine(
-    label({ label: 'midisocket' }),
+    label({ label: 'chaotic-pedalboard' }),
     timestamp(),
     myFormat
   ),

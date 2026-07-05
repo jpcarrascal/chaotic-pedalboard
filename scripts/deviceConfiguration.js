@@ -933,7 +933,7 @@ class DeviceConfiguration {
             // Generate filename with timestamp
             const now = new Date();
             const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            a.download = `midisocket-config-${timestamp}.json`;
+            a.download = `chaotic-pedalboard-config-${timestamp}.json`;
             
             // Trigger download
             document.body.appendChild(a);

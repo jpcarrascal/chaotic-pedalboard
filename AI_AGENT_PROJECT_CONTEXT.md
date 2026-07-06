@@ -1,5 +1,14 @@
 # Chaotic Pedalboard: AI Agent Project Context
 
+> **⚠️ Architecture update (2026-07-06):** the server was migrated onto the
+> **beatlink-core** framework. `scripts/sessionObj.js` no longer exists;
+> `index.js` is now a thin entrypoint and app-specific server logic lives in
+> `server/midiPlugin.js`. Sections below describing the old server internals
+> (sessionObj API, server event handling) are historical; client/UI and
+> feature documentation remains accurate. See `CLAUDE.md` and
+> github.com/jpcarrascal/beatlink-core (BEATLINK-SPEC.md) for the current
+> server architecture. Server tests: `tests/server.test.js`.
+
 ## 1) Project Description
 
 Chaotic Pedalboard (formerly MIDI Socket) is a real-time collaborative music web app that currently operates as a MIDI routing bridge between:

@@ -75,16 +75,17 @@ function initializeSocket() {
     publicApp.socket = io('', {
         query: {
             session: publicApp.sessionName,
-            type: 'public'
+            role: 'public'
         }
     });
 
     publicApp.socket.on('connect', onSocketConnect);
     publicApp.socket.on('disconnect', onSocketDisconnect);
-    publicApp.socket.on('exit session', onExitSession);
+    publicApp.socket.on('session-unavailable', onExitSession);
+    publicApp.socket.on('session-ended', onExitSession);
     publicApp.socket.on('public-session-snapshot', onPublicSessionSnapshot);
     publicApp.socket.on('public-device-assignments-updated', onDeviceAssignmentsUpdated);
-    publicApp.socket.on('public-queue-updated', onQueueUpdated);
+    publicApp.socket.on('queue-updated', onQueueUpdated);
     publicApp.socket.on('qr-base-url-updated', onQrBaseUrlUpdated);
 }
 

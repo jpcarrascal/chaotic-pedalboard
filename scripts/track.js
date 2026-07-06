@@ -121,7 +121,7 @@ if(!initials && session) { // No initials == no socket connection
     /* ----------- Socket set up: ------------ */
     document.getElementById("controller").style.display = "flex";
     controllerContainer.style.display = "flex"; // Show controller container
-    socket = io("", {query:{initials: initials, session: session}});
+    socket = io("", {query:{initials: initials, session: session, role: "participant"}});
     
     socket.on("connect", () => {
         setCookie("retries", 0, 1000); 
@@ -296,7 +296,7 @@ if(!initials && session) { // No initials == no socket connection
         // Could add visual feedback here
     });
 
-    socket.on('exit session', function(msg) {
+    function onSessionGone(msg) {
         if(retries < maxRetries) {
             console.log("Retrying...");
             retries = parseInt(getCookie("retries")) + 1;
@@ -309,6 +309,15 @@ if(!initials && session) { // No initials == no socket connection
         } else {
             console.log("Max retries reached. Exiting.");
             document.location.href = "/track?exitreason=" + msg.reason;
+        }
+    }
+    socket.on('session-unavailable', onSessionGone);
+    socket.on('session-ended', onSessionGone);
+
+    // Host takeover: veil is lifted so the takeover message stays readable.
+    socket.on('takeover-state-updated', function(msg) {
+        if (msg && msg.takeover && msg.takeover.enabled) {
+            document.getElementById("veil").style.display = "none";
         }
     });
 
@@ -864,10 +873,10 @@ function createButtonGrid(parent, buttons) {
 function sendControlChange(ccNumber, value) {
     if (socket && mySocketID && midiChannel !== -1) {
         const message = [0xB0 + midiChannel, ccNumber, value];
-        socket.emit("track-midi-message", {
-            source: "ui", 
-            message: message, 
-            socketID: mySocketID,
+        socket.emit("routed-message", {
+            type: "MIDI",
+            source: "ui",
+            message: message,
             timestamp: performance.now()
         });
     }
@@ -897,10 +906,10 @@ function midiInToSocket(msg) {
         message = replaceMidiChannel(message, midiChannel);
     }
     
-    socket.emit("track-midi-message", {
-        source: "midi-input", 
-        message: message, 
-        socketID: mySocketID,
+    socket.emit("routed-message", {
+        type: "MIDI",
+        source: "midi-input",
+        message: message,
         timestamp: performance.now()
     });
     

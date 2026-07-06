@@ -325,18 +325,18 @@ function initializeSocket() {
     
     // Initialize socket connection
     app.socket = io('', {
-        query: { 
+        query: {
             session: app.sessionName,
-            type: 'sequencer'
+            role: 'host'
         }
     });
-    
+
     // Socket event handlers
     app.socket.on('connect', onSocketConnect);
     app.socket.on('disconnect', onSocketDisconnect);
-    app.socket.on('track joined', onTrackJoined);
-    app.socket.on('track left', onTrackLeft);
-    app.socket.on('track-midi-message', onTrackMidiMessage);
+    app.socket.on('participant-joined', onTrackJoined);
+    app.socket.on('participant-left', onTrackLeft);
+    app.socket.on('routed-message', onTrackMidiMessage);
     app.socket.on('get-track-assignment', onGetTrackAssignment);
     app.socket.on('device-assignments-updated', onDeviceAssignmentsUpdated);
     app.socket.on('device-runtime-state-updated', onDeviceRuntimeStateUpdated);
@@ -344,8 +344,8 @@ function initializeSocket() {
     app.socket.on('session-mode-updated', onSessionModeUpdated);
     app.socket.on('takeover-state-updated', onTakeoverStateUpdated);
     app.socket.on('takeover-error', onTakeoverError);
-    app.socket.on('slot-duration-updated', onSlotDurationUpdated);
-    app.socket.on('sequencer exists', onSequencerExists);
+    app.socket.on('turn-duration-updated', onSlotDurationUpdated);
+    app.socket.on('host-exists', onSequencerExists);
     app.socket.on('error', onSocketError);
 }
 
@@ -510,7 +510,7 @@ function onApplySlotDuration() {
     // Normalize any accepted input format back to MM:SS in the UI.
     app.elements.slotDurationInput.value = formatSecondsAsMMSS(seconds);
 
-    app.socket.emit('set-slot-duration', { seconds });
+    app.socket.emit('set-turn-duration', { seconds });
 }
 
 function onSlotDurationUpdated(data) {
@@ -545,7 +545,7 @@ function onSocketDisconnect() {
 
 function onTrackJoined(data) {
     console.log('Track joined:', data);
-    const trackId = data.track.toString();
+    const trackId = data.slot.toString();
     
     // Add track to routing matrix
     app.routingMatrix.addTrack(trackId, data.socketID, data.initials);
@@ -560,7 +560,7 @@ function onTrackJoined(data) {
 
 function onTrackLeft(data) {
     console.log('Track left:', data);
-    const trackId = data.track.toString();
+    const trackId = data.slot.toString();
     
     // Handle disconnect in MIDI router (sends note offs)
     if (app.midiRouter) {
@@ -577,7 +577,8 @@ function onTrackLeft(data) {
 
 function onTrackMidiMessage(data) {
     if (!app.midiRouter) return;
-    
+    if (data.type && data.type !== 'MIDI') return; // routed transport is protocol-neutral
+
     // Find track by socket ID
     const trackId = app.routingMatrix.findTrackBySocketId(data.socketID);
     if (!trackId) {
@@ -897,13 +898,13 @@ function setSessionMode(mode) {
     updateTakeoverControls();
 
     if (mode === 'play') {
-        app.socket.emit('session play', { socketID: app.socket.id });
+        app.socket.emit('session-play', { socketID: app.socket.id });
         showInfo('Session mode: Play');
         return;
     }
 
     if (mode === 'pause') {
-        app.socket.emit('session pause', { socketID: app.socket.id });
+        app.socket.emit('session-pause', { socketID: app.socket.id });
         showInfo('Session mode: Pause');
         return;
     }

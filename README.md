@@ -89,7 +89,7 @@ Share: `http://localhost:3000/track?session=yoursession`
 
 ## 🛠 Technical Requirements
 
-- **Node.js** (v14+)
+- **Node.js** (v24+)
 - **Modern Web Browser** with Web MIDI API support:
   - Chrome/Chromium (recommended)
   - Edge

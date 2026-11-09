@@ -7,8 +7,6 @@ const AMBGRID = {
     cellAspect: 9 / 16,      // width / height
     gapRatio: 0.015,         // gap as a fraction of the shorter window side
     fadeMs: 2000,            // matches ambsynth envelope release
-    initialsOpacity: 0.7,    // on top of the 50% ink -> ~35% visible
-    initialsSizeRatio: 0.08, // font size as a fraction of cell width
     cornerRadiusRatio: 0.04
 };
 
@@ -16,7 +14,8 @@ const ambgrid = {
     sessionName: new URLSearchParams(window.location.search).get('session') || '',
     socket: null,
     players: [],             // [{ socketID, initials, color, ink }]
-    touches: new Map(),      // socketID -> { x, y, touching, releasedAt }
+    touches: new Map(),      // socketID -> { x, y, touching, releasedAt } (crosshair)
+    ripples: new Map(),      // socketID -> [{ x, y, startedAt }] (short taps, overlap)
     layout: null,
     canvas: document.getElementById('ambgrid'),
     statusEl: document.getElementById('ambgrid-status')
@@ -87,16 +86,22 @@ function drawCell(ctx, rect, player, now) {
     ctx.clip();
     ctx.translate(rect.x, rect.y);
 
-    // Initials: bottom-left, beneath the touch overlay.
-    const fontSize = Math.max(10, rect.w * AMBGRID.initialsSizeRatio);
-    const margin = fontSize * 0.6;
-    ctx.save();
-    ctx.globalAlpha = AMBGRID.initialsOpacity;
-    ctx.fillStyle = player.ink;
-    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`;
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(player.initials, margin, rect.h - margin * 0.6);
-    ctx.restore();
+    window.AmbSynthEmbed.drawInitials(ctx, rect.w, rect.h, player.initials, player.ink);
+
+    const ripples = ambgrid.ripples.get(player.socketID);
+    if (ripples) {
+        const live = ripples.filter(r => now - r.startedAt < AMBGRID.fadeMs);
+        if (live.length === 0) {
+            ambgrid.ripples.delete(player.socketID);
+        } else {
+            ambgrid.ripples.set(player.socketID, live);
+            live.forEach((r) => {
+                const point = { x: r.x * rect.w, y: r.y * rect.h };
+                window.AmbSynthEmbed.drawRipple(ctx, rect.w, rect.h, point,
+                    (now - r.startedAt) / AMBGRID.fadeMs, player.ink);
+            });
+        }
+    }
 
     const touch = ambgrid.touches.get(player.socketID);
     if (touch) {
@@ -150,18 +155,30 @@ function onPlayersUpdated(msg) {
     for (const socketID of ambgrid.touches.keys()) {
         if (!present.has(socketID)) ambgrid.touches.delete(socketID);
     }
+    for (const socketID of ambgrid.ripples.keys()) {
+        if (!present.has(socketID)) ambgrid.ripples.delete(socketID);
+    }
     resizeCanvas();
     refreshEmptyState();
 }
 
 function onTouch(msg) {
     if (!msg || !msg.socketID) return;
+    const now = performance.now();
+    if (msg.phase === 'up' && msg.short) {
+        // Short tap: add a ripple (older ones keep going); no crosshair fade.
+        ambgrid.touches.delete(msg.socketID);
+        const list = ambgrid.ripples.get(msg.socketID) || [];
+        list.push({ x: msg.x, y: msg.y, startedAt: now });
+        ambgrid.ripples.set(msg.socketID, list.slice(-window.AmbSynthEmbed.MAX_RIPPLES));
+        return;
+    }
     const touching = msg.phase !== 'up';
     ambgrid.touches.set(msg.socketID, {
         x: msg.x,
         y: msg.y,
         touching,
-        releasedAt: touching ? null : performance.now()
+        releasedAt: touching ? null : now
     });
 }
 

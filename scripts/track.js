@@ -21,6 +21,14 @@ if(initials === null || initials === "undefined" || initials === "") {
     }
 }
 
+// Initials: uppercase, no spaces, max 3 chars (also cleans old/long cookies & URLs).
+function normalizeInitials(value) {
+    if (typeof value !== 'string') return null;
+    const cleaned = value.replace(/\s+/g, '').toUpperCase().slice(0, 3);
+    return cleaned.length > 0 ? cleaned : null;
+}
+initials = normalizeInitials(initials);
+
 setCookie("retries", 0, 1000);
 var retries = 0;
 var maxRetries = 3;
@@ -85,6 +93,7 @@ function showWaitingSynth() {
             showHud: false,
             minHeight: '100%',
             borderRadius: '8px',
+            initials: initials || '',
             onTouch: emitWaitingSynthTouch
         };
         if (participantColor) synthOptions.background = participantColor;
@@ -112,6 +121,15 @@ function hideWaitingSynth() {
     emitWaitingSynthActive(false);
 }
 
+// Pedal view background: participant color (consistent across pedal/ambsynth),
+// falling back to the pedal's color until the participant color arrives.
+function applyPedalViewBackground() {
+    const color = participantColor || (assignedDevice && assignedDevice.color) || null;
+    if (!color) return;
+    document.body.style.backgroundColor = color;
+    document.body.style.color = getContrastColor(color);
+}
+
 function setDeviceInfoVisible(visible) {
     if (!deviceInfoElement) return;
     deviceInfoElement.style.display = visible ? 'block' : 'none';
@@ -129,11 +147,12 @@ if(!initials && session) { // No initials == no socket connection
     document.getElementById("initials-form").style.display = "block";
     document.getElementById("veil").style.display = "none";
     document.getElementById("initials").addEventListener("input", function(e) {
-        this.value = this.value.toUpperCase();
+        this.value = normalizeInitials(this.value) || '';
     });
     document.getElementById("initials-form").addEventListener("submit", function(e) {
         e.preventDefault();
-        initials = document.getElementById("initials").value.toUpperCase();
+        initials = normalizeInitials(document.getElementById("initials").value);
+        if (!initials) return;
         document.getElementById("initials-form").style.display = "none";
         document.location.href = "/track?session=" + session + "&initials=" + initials;
     });
@@ -254,6 +273,7 @@ if(!initials && session) { // No initials == no socket connection
         if (waitingSynthInstance && typeof waitingSynthInstance.setBackground === 'function') {
             waitingSynthInstance.setBackground(participantColor);
         }
+        if (assignedDevice) applyPedalViewBackground();
     });
 
     // Device assignment message - handles all track data including device color
@@ -448,14 +468,7 @@ function updateDeviceInterface(device) {
         }
     }
     
-    // Apply device color as background
-    if (device.color) {
-        document.body.style.backgroundColor = device.color;
-        // Calculate contrast color for text
-        const textColor = getContrastColor(device.color);
-        document.body.style.color = textColor;
-        console.log("Applied device color:", device.color, "with text color:", textColor);
-    }
+    applyPedalViewBackground();
     
     // Clear existing controllers
     clearDynamicControllerContent();

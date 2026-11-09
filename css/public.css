@@ -248,12 +248,17 @@ body {
   gap: clamp(8px, 0.8vw, 12px);
 }
 
-.device-color-indicator {
-  width: clamp(18px, 2vw, 26px);
-  height: clamp(18px, 2vw, 26px);
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+.user-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(6px, 0.6vw, 10px);
+}
+
+/* Participant color as a 9:16 portrait swatch, matching /ambgrid cells. */
+.user-color-swatch {
+  width: clamp(14px, 1.4vw, 20px);
+  aspect-ratio: 9 / 16;
+  border-radius: 3px;
   flex-shrink: 0;
 }
 

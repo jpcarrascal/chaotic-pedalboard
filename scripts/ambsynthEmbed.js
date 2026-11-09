@@ -44,6 +44,7 @@
   const OVERLAY_REFERENCE_WIDTH = 390;
   const OVERLAY_CIRCLE_RADIUS = 18;
   const OVERLAY_LINE_WIDTH = 3.5;
+  const OVERLAY_LINE_GAP = 6; // space between circle outline and crosshair
 
   function parseHexColor(hex) {
     const match = /^#?([0-9a-f]{6})$/i.exec(`${hex || ''}`.trim());
@@ -66,28 +67,70 @@
     return contrastWithBlack > contrastWithWhite ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)';
   }
 
-  // Draws the circle + crosshair for a point (canvas px) at the given opacity.
+  // Draws the circle outline + crosshair for a point (canvas px) at the given
+  // opacity. The crosshair is 4 segments that stop short of the circle.
   function drawOverlay(ctx, width, height, point, opacity, ink, showLines) {
     if (!point || opacity <= 0) return;
     const scale = Math.min(1, width / OVERLAY_REFERENCE_WIDTH);
+    const radius = Math.max(3, OVERLAY_CIRCLE_RADIUS * scale);
+    const lineWidth = Math.max(1, OVERLAY_LINE_WIDTH * scale);
+    const gap = radius + lineWidth / 2 + Math.max(2, OVERLAY_LINE_GAP * scale);
     ctx.save();
     ctx.globalAlpha = Math.min(1, opacity);
-    ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
-    ctx.lineWidth = Math.max(1, OVERLAY_LINE_WIDTH * scale);
+    ctx.lineWidth = lineWidth;
 
     ctx.beginPath();
-    ctx.arc(point.x, point.y, Math.max(3, OVERLAY_CIRCLE_RADIUS * scale), 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
 
     if (showLines) {
       ctx.beginPath();
-      ctx.moveTo(point.x, 0);
-      ctx.lineTo(point.x, height);
-      ctx.moveTo(0, point.y);
-      ctx.lineTo(width, point.y);
+      if (point.y - gap > 0) { ctx.moveTo(point.x, 0); ctx.lineTo(point.x, point.y - gap); }
+      if (point.y + gap < height) { ctx.moveTo(point.x, point.y + gap); ctx.lineTo(point.x, height); }
+      if (point.x - gap > 0) { ctx.moveTo(0, point.y); ctx.lineTo(point.x - gap, point.y); }
+      if (point.x + gap < width) { ctx.moveTo(point.x + gap, point.y); ctx.lineTo(width, point.y); }
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  // Short-tap ripple: a single ring growing from the circle size to a fraction
+  // of the canvas width, fading out. progress runs 0..1 over the fade.
+  const RIPPLE_MAX_RADIUS_RATIO = 0.7;
+  const MAX_RIPPLES = 8; // per participant; oldest dropped past this
+
+  function drawRipple(ctx, width, height, point, progress, ink) {
+    if (!point || progress >= 1) return;
+    const t = Math.max(0, progress);
+    const scale = Math.min(1, width / OVERLAY_REFERENCE_WIDTH);
+    const startRadius = Math.max(3, OVERLAY_CIRCLE_RADIUS * scale);
+    const endRadius = Math.max(startRadius, width * RIPPLE_MAX_RADIUS_RATIO);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out: fast start, slows down
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1, OVERLAY_LINE_WIDTH * scale);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, startRadius + (endRadius - startRadius) * eased, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Initials label: bottom-left, low opacity, drawn beneath the touch overlay.
+  const INITIALS_OPACITY = 0.7;     // on top of the 50% ink -> ~35% visible
+  const INITIALS_SIZE_RATIO = 0.08; // font size as a fraction of canvas width
+
+  function drawInitials(ctx, width, height, initials, ink) {
+    if (!initials) return;
+    const fontSize = Math.max(10, width * INITIALS_SIZE_RATIO);
+    const margin = fontSize * 0.6;
+    ctx.save();
+    ctx.globalAlpha = INITIALS_OPACITY;
+    ctx.fillStyle = ink;
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`;
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(initials, margin, height - margin * 0.6);
     ctx.restore();
   }
 
@@ -530,13 +573,18 @@
       background: config.background,
       ink: inkFor(config.background)
     };
+    const initialsLabel = typeof config.initials === 'string' ? config.initials : '';
 
-    // Overlay fade after lift: matches the long-touch sound release.
+    // Long touch: circle + crosshair fade after lift (cut off by a new touch).
+    // Short tap: ripple ring; ripples overlap and outlive new touches.
+    // Both last CONFIG.envelope.release (matches the sound release).
     let fadePoint = null;
     let fadeStartedAt = null;
-    let fadeFrameId = null;
+    let ripples = []; // [{ point, startedAt }]
+    let animationFrameId = null;
 
     // Optional mirror callback: onTouch({ phase: 'down'|'move'|'up', x, y })
+    // ('up' also carries short: true|false)
     // with x/y normalized 0..1. Moves are coalesced to one per frame.
     const onTouch = typeof config.onTouch === 'function' ? config.onTouch : null;
     let pendingMove = null;
@@ -550,7 +598,7 @@
       };
     }
 
-    function emitTouch(phase, point) {
+    function emitTouch(phase, point, extra) {
       if (!onTouch || !point) return;
       if (phase === 'move') {
         pendingMove = normalizedPoint(point);
@@ -570,31 +618,45 @@
         moveFrameId = null;
       }
       pendingMove = null;
-      onTouch({ phase, ...normalizedPoint(point) });
+      onTouch({ phase, ...normalizedPoint(point), ...(extra || {}) });
     }
 
-    function stopFade() {
-      if (fadeFrameId !== null) {
-        global.cancelAnimationFrame(fadeFrameId);
-        fadeFrameId = null;
+    // Redraws every frame while a fade or ripple is running.
+    function ensureAnimating() {
+      if (animationFrameId !== null) return;
+      const step = () => {
+        draw();
+        animationFrameId = (fadePoint || ripples.length > 0)
+          ? global.requestAnimationFrame(step)
+          : null;
+      };
+      animationFrameId = global.requestAnimationFrame(step);
+    }
+
+    function stopAnimating() {
+      if (animationFrameId !== null) {
+        global.cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
       }
+    }
+
+    // Cuts off the long-touch fade only; ripples keep going.
+    function stopFade() {
       fadePoint = null;
       fadeStartedAt = null;
     }
 
-    function startFade(point) {
+    function startFade(point, isShortTap) {
       stopFade();
-      fadePoint = point ? { ...point } : null;
-      fadeStartedAt = global.performance.now();
-      const step = () => {
-        draw();
-        if (fadePoint) {
-          fadeFrameId = global.requestAnimationFrame(step);
-        } else {
-          fadeFrameId = null;
-        }
-      };
-      fadeFrameId = global.requestAnimationFrame(step);
+      if (!point) return;
+      if (isShortTap) {
+        ripples.push({ point: { ...point }, startedAt: global.performance.now() });
+        if (ripples.length > MAX_RIPPLES) ripples = ripples.slice(-MAX_RIPPLES);
+      } else {
+        fadePoint = { ...point };
+        fadeStartedAt = global.performance.now();
+      }
+      ensureAnimating();
     }
 
     function resizeCanvas() {
@@ -623,17 +685,23 @@
 
       ctx.fillStyle = colors.background;
       ctx.fillRect(0, 0, width, height);
+      drawInitials(ctx, width, height, initialsLabel, colors.ink);
+
+      const now = global.performance.now();
+      const fadeMs = CONFIG.envelope.release;
+      ripples = ripples.filter(ripple => now - ripple.startedAt < fadeMs);
+      ripples.forEach((ripple) => {
+        drawRipple(ctx, width, height, ripple.point, (now - ripple.startedAt) / fadeMs, colors.ink);
+      });
 
       if (isTouching && activePoint) {
         drawOverlay(ctx, width, height, activePoint, 1, colors.ink, true);
       } else if (fadePoint) {
-        const elapsed = global.performance.now() - fadeStartedAt;
-        const opacity = 1 - (elapsed / CONFIG.envelope.release);
+        const opacity = 1 - ((now - fadeStartedAt) / fadeMs);
         if (opacity > 0) {
           drawOverlay(ctx, width, height, fadePoint, opacity, colors.ink, true);
         } else {
-          fadePoint = null;
-          fadeStartedAt = null;
+          stopFade();
         }
       }
     }
@@ -696,8 +764,8 @@
       const wasShortTouch = touchDurationMs < CONFIG.touch.thresholdMs;
 
       clearTouchThresholdTimer();
-      emitTouch('up', persistentPoint);
-      startFade(persistentPoint);
+      emitTouch('up', persistentPoint, { short: wasShortTouch });
+      startFade(persistentPoint, wasShortTouch);
       activePoint = null;
       isTouching = false;
 
@@ -927,6 +995,8 @@
           stopSynth(80);
         }
         stopFade();
+        ripples = [];
+        stopAnimating();
         if (moveFrameId !== null) {
           global.cancelAnimationFrame(moveFrameId);
           moveFrameId = null;
@@ -965,6 +1035,9 @@
     create: mount,
     inkFor,
     drawOverlay,
+    drawInitials,
+    drawRipple,
+    MAX_RIPPLES,
     version: '0.4.0-mirror'
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -244,6 +244,33 @@ describe('chaotic-pedalboard server', () => {
         await leftPromise;
     });
 
+    test('pedal assignments carry the participant color for public displays', async () => {
+        await setupHostWithDevices('s12', [DEVICES[0]]);
+        const display = connect({ role: 'public', session: 's12' });
+        await waitFor(display, 'public-session-snapshot');
+
+        const assignedPromise = waitForMatch(display, 'public-device-assignments-updated',
+            m => Object.keys(m.assignments).length === 1);
+        const track = connect({ role: 'participant', session: 's12', initials: 'JP' });
+        const [{ color }, assigned] = await Promise.all([
+            waitFor(track, 'participant-color'),
+            assignedPromise
+        ]);
+        expect(Object.values(assigned.assignments)[0].userColor).toBe(color);
+    });
+
+    test('ambsynth player initials are uppercased and capped at 3 chars', async () => {
+        await setupHostWithDevices('s11', []);
+        const display = connect({ role: 'public', session: 's11' });
+        await waitFor(display, 'public-session-snapshot');
+
+        const track = connect({ role: 'participant', session: 's11', initials: 'j p rodriguez' });
+        await waitFor(track, 'participant-color');
+        const listPromise = waitFor(display, 'ambsynth-players-updated');
+        track.emit('ambsynth-active', { active: true });
+        expect((await listPromise).players[0].initials).toBe('JPR');
+    });
+
     test('ambsynth touches reach public displays only from active players', async () => {
         await setupHostWithDevices('s10', []);
         const display = connect({ role: 'public', session: 's10' });
@@ -261,6 +288,11 @@ describe('chaotic-pedalboard server', () => {
 
         const touch = await touchPromise;
         expect(touch).toEqual({ socketID: track.id, phase: 'move', x: 1, y: 0.25 }); // x clamped
+
+        // 'up' carries the short-tap flag (drives the ripple on /ambgrid).
+        const upPromise = waitFor(display, 'ambsynth-touch');
+        track.emit('ambsynth-touch', { phase: 'up', x: 0.5, y: 0.5, short: true });
+        expect(await upPromise).toEqual({ socketID: track.id, phase: 'up', x: 0.5, y: 0.5, short: true });
     });
 
     test('pedal images API serves the catalog', async () => {

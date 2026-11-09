@@ -425,7 +425,9 @@ function renderDevices() {
     body.innerHTML = publicApp.devices.map((device) => {
         const assignment = assignmentsByDeviceId.get(device.id) || null;
         const userLabel = assignment && assignment.userInitials ? escapeHtml(assignment.userInitials) : '---';
-        const deviceColor = device && device.color ? device.color : '#718096';
+        const userSwatch = assignment && assignment.userColor
+            ? `<span class="user-color-swatch" style="background:${escapeAttribute(assignment.userColor)}" aria-hidden="true"></span>`
+            : '';
         const photoCell = device.image
             ? `<img class="device-photo" src="${escapeAttribute(device.image)}" alt="${escapeAttribute(device.name || 'Device')} photo">`
             : '<div class="photo-placeholder">No image</div>';
@@ -434,10 +436,9 @@ function renderDevices() {
             <tr>
                             <td class="device-cell">
                                 ${photoCell}
-                                <span class="device-color-indicator" style="background:${escapeAttribute(deviceColor)}" aria-hidden="true"></span>
                                 <span class="device-name">${escapeHtml(device.name || 'Unnamed Device')}</span>
                             </td>
-              <td>${userLabel}</td>
+              <td><span class="user-cell">${userSwatch}<span>${userLabel}</span></span></td>
             </tr>
         `;
     }).join('');

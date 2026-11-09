@@ -30,11 +30,12 @@ function getRuntimeStates(session) {
     return session.getAttribute('deviceRuntimeStates');
 }
 
-function assignDeviceToSlot(session, slot, device, userInitials) {
+function assignDeviceToSlot(session, slot, device, userInitials, userColor) {
     getAssignments(session)[slot] = {
         deviceId: device.id,
         deviceName: device.name || 'Unknown Device',
-        userInitials: userInitials || ''
+        userInitials: userInitials || '',
+        userColor: userColor || null
     };
 }
 
@@ -163,9 +164,12 @@ function ambsynthPlayerList(session) {
         .map(([socketID, player]) => ({ socketID, ...player }));
 }
 
+// App rule: initials are uppercase, no spaces, max 3 chars (track.js enforces
+// the same; this guards the ambsynth list against old/hand-made URLs).
 function handshakeInitials(socket) {
     const raw = socket.handshake && socket.handshake.query ? socket.handshake.query.initials : '';
-    return (typeof raw === 'string' && raw.trim() !== '') ? raw.trim() : 'GUEST';
+    const cleaned = typeof raw === 'string' ? raw.replace(/\s+/g, '').toUpperCase().slice(0, 3) : '';
+    return cleaned || '?';
 }
 
 function clampUnit(value) {
@@ -273,7 +277,7 @@ function syncDeviceAssignmentFromHostMessage(session, msg) {
         }
         const initials = session.participants.initialsOf(msg.socketID)
             || (assignments[slot] ? assignments[slot].userInitials : '');
-        assignDeviceToSlot(session, slot, msg.device, initials);
+        assignDeviceToSlot(session, slot, msg.device, initials, assignParticipantColor(session, msg.socketID));
     } else if (assignments[slot]) {
         delete assignments[slot];
     }
@@ -284,7 +288,7 @@ function syncDeviceAssignmentFromHostMessage(session, msg) {
 module.exports = function midiPlugin(ctx) {
     ctx.defineAttributes({
         configuredDevices: [],
-        deviceAssignments: {},   // slot -> { deviceId, deviceName, userInitials }
+        deviceAssignments: {},   // slot -> { deviceId, deviceName, userInitials, userColor }
         deviceRuntimeStates: {}, // deviceId -> { controllers: {"cc:<n>": value}, updatedAt }
         takeover: { enabled: false, value: 127 },
         qrBaseUrl: null,
@@ -301,7 +305,8 @@ module.exports = function midiPlugin(ctx) {
     ctx.onActivate((session, { slot, socketID, initials }) => {
         const device = getRandomUnassignedDevice(session);
         if (device) {
-            assignDeviceToSlot(session, slot, device, initials);
+            // Direct joins activate before onConnect, so assign the color here too.
+            assignDeviceToSlot(session, slot, device, initials, assignParticipantColor(session, socketID));
         }
         emitTrackAssignment(ctx, session, socketID, slot);
         emitDeviceAssignments(ctx, session);
@@ -391,9 +396,9 @@ module.exports = function midiPlugin(ctx) {
         const x = clampUnit(msg.x);
         const y = clampUnit(msg.y);
         if (x === null || y === null) return;
-        ctx.emitToRole(session.name, 'public', 'ambsynth-touch', {
-            socketID: socket.id, phase: msg.phase, x, y
-        });
+        const relayed = { socketID: socket.id, phase: msg.phase, x, y };
+        if (msg.phase === 'up') relayed.short = Boolean(msg.short); // short tap -> ripple
+        ctx.emitToRole(session.name, 'public', 'ambsynth-touch', relayed);
     });
 
     // Track asks for its current device assignment (e.g. after reconnect).

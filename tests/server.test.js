@@ -198,6 +198,71 @@ describe('chaotic-pedalboard server', () => {
         expect(session.getAttribute('deviceAssignments')[slot].deviceId).toBe(other.id);
     });
 
+    test('participants get distinct background colors', async () => {
+        await setupHostWithDevices('s8', []);
+        const t1 = connect({ role: 'participant', session: 's8', initials: 'AA' });
+        const t2 = connect({ role: 'participant', session: 's8', initials: 'BB' });
+        const [c1, c2] = await Promise.all([
+            waitFor(t1, 'participant-color'),
+            waitFor(t2, 'participant-color')
+        ]);
+        expect(c1.color).toMatch(/^#[0-9a-f]{6}$/i);
+        expect(c2.color).toMatch(/^#[0-9a-f]{6}$/i);
+        expect(c1.color).not.toBe(c2.color);
+    });
+
+    test('ambsynth player list follows active state and disconnects', async () => {
+        await setupHostWithDevices('s9', []);
+        const display = connect({ role: 'public', session: 's9' });
+        await waitFor(display, 'public-session-snapshot');
+
+        const track = connect({ role: 'participant', session: 's9', initials: 'JP' });
+        const { color } = await waitFor(track, 'participant-color');
+
+        const joinedPromise = waitForMatch(display, 'ambsynth-players-updated', m => m.players.length === 1);
+        track.emit('ambsynth-active', { active: true });
+        const joined = await joinedPromise;
+        expect(joined.players[0]).toEqual({ socketID: track.id, initials: 'JP', color });
+
+        // Late-joining display can request the current list.
+        const display2 = connect({ role: 'public', session: 's9' });
+        await waitFor(display2, 'public-session-snapshot');
+        const listPromise = waitFor(display2, 'ambsynth-players-updated');
+        display2.emit('request-ambsynth-players');
+        expect((await listPromise).players).toHaveLength(1);
+
+        const inactivePromise = waitForMatch(display, 'ambsynth-players-updated', m => m.players.length === 0);
+        track.emit('ambsynth-active', { active: false });
+        await inactivePromise;
+
+        const rejoinedPromise = waitForMatch(display, 'ambsynth-players-updated', m => m.players.length === 1);
+        track.emit('ambsynth-active', { active: true });
+        await rejoinedPromise;
+
+        const leftPromise = waitForMatch(display, 'ambsynth-players-updated', m => m.players.length === 0);
+        track.disconnect();
+        await leftPromise;
+    });
+
+    test('ambsynth touches reach public displays only from active players', async () => {
+        await setupHostWithDevices('s10', []);
+        const display = connect({ role: 'public', session: 's10' });
+        await waitFor(display, 'public-session-snapshot');
+
+        const track = connect({ role: 'participant', session: 's10', initials: 'JP' });
+        await waitFor(track, 'participant-color');
+
+        const touchPromise = waitFor(display, 'ambsynth-touch');
+        track.emit('ambsynth-touch', { phase: 'down', x: 0.1, y: 0.1 }); // not active: dropped
+        const activePromise = waitFor(display, 'ambsynth-players-updated');
+        track.emit('ambsynth-active', { active: true });
+        await activePromise;
+        track.emit('ambsynth-touch', { phase: 'move', x: 1.5, y: 0.25 });
+
+        const touch = await touchPromise;
+        expect(touch).toEqual({ socketID: track.id, phase: 'move', x: 1, y: 0.25 }); // x clamped
+    });
+
     test('pedal images API serves the catalog', async () => {
         const response = await fetch(`http://localhost:${port}/api/pedal-images`);
         const body = await response.json();

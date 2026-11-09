@@ -39,6 +39,58 @@
     ui: { showHud: false }
   };
 
+  // Reference phone width used to scale the overlay on smaller/larger canvases
+  // (e.g. the /ambgrid cells), so circle and lines keep their proportions.
+  const OVERLAY_REFERENCE_WIDTH = 390;
+  const OVERLAY_CIRCLE_RADIUS = 18;
+  const OVERLAY_LINE_WIDTH = 3.5;
+
+  function parseHexColor(hex) {
+    const match = /^#?([0-9a-f]{6})$/i.exec(`${hex || ''}`.trim());
+    if (!match) return null;
+    const value = parseInt(match[1], 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  }
+
+  // 50% white or black, whichever contrasts more with the background (WCAG).
+  function inkFor(background) {
+    const rgb = parseHexColor(background);
+    if (!rgb) return 'rgba(255, 255, 255, 0.5)';
+    const [r, g, b] = rgb.map((channel) => {
+      const c = channel / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const contrastWithWhite = 1.05 / (luminance + 0.05);
+    const contrastWithBlack = (luminance + 0.05) / 0.05;
+    return contrastWithBlack > contrastWithWhite ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)';
+  }
+
+  // Draws the circle + crosshair for a point (canvas px) at the given opacity.
+  function drawOverlay(ctx, width, height, point, opacity, ink, showLines) {
+    if (!point || opacity <= 0) return;
+    const scale = Math.min(1, width / OVERLAY_REFERENCE_WIDTH);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, opacity);
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1, OVERLAY_LINE_WIDTH * scale);
+
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, Math.max(3, OVERLAY_CIRCLE_RADIUS * scale), 0, Math.PI * 2);
+    ctx.fill();
+
+    if (showLines) {
+      ctx.beginPath();
+      ctx.moveTo(point.x, 0);
+      ctx.lineTo(point.x, height);
+      ctx.moveTo(0, point.y);
+      ctx.lineTo(width, point.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function isElement(value) {
     return value && typeof value === 'object' && value.nodeType === 1;
   }
@@ -475,11 +527,75 @@
     }
 
     const colors = {
-      background: '#2f3947',
-      line: '#67e8f9',
-      circleFill: '#67e8f9',
-      circleStroke: '#67e8f9'
+      background: config.background,
+      ink: inkFor(config.background)
     };
+
+    // Overlay fade after lift: matches the long-touch sound release.
+    let fadePoint = null;
+    let fadeStartedAt = null;
+    let fadeFrameId = null;
+
+    // Optional mirror callback: onTouch({ phase: 'down'|'move'|'up', x, y })
+    // with x/y normalized 0..1. Moves are coalesced to one per frame.
+    const onTouch = typeof config.onTouch === 'function' ? config.onTouch : null;
+    let pendingMove = null;
+    let moveFrameId = null;
+
+    function normalizedPoint(point) {
+      const bounds = canvas.getBoundingClientRect();
+      return {
+        x: bounds.width > 0 ? Math.max(0, Math.min(1, point.x / bounds.width)) : 0,
+        y: bounds.height > 0 ? Math.max(0, Math.min(1, point.y / bounds.height)) : 0
+      };
+    }
+
+    function emitTouch(phase, point) {
+      if (!onTouch || !point) return;
+      if (phase === 'move') {
+        pendingMove = normalizedPoint(point);
+        if (moveFrameId === null) {
+          moveFrameId = global.requestAnimationFrame(() => {
+            moveFrameId = null;
+            if (pendingMove) {
+              onTouch({ phase: 'move', ...pendingMove });
+              pendingMove = null;
+            }
+          });
+        }
+        return;
+      }
+      if (moveFrameId !== null) {
+        global.cancelAnimationFrame(moveFrameId);
+        moveFrameId = null;
+      }
+      pendingMove = null;
+      onTouch({ phase, ...normalizedPoint(point) });
+    }
+
+    function stopFade() {
+      if (fadeFrameId !== null) {
+        global.cancelAnimationFrame(fadeFrameId);
+        fadeFrameId = null;
+      }
+      fadePoint = null;
+      fadeStartedAt = null;
+    }
+
+    function startFade(point) {
+      stopFade();
+      fadePoint = point ? { ...point } : null;
+      fadeStartedAt = global.performance.now();
+      const step = () => {
+        draw();
+        if (fadePoint) {
+          fadeFrameId = global.requestAnimationFrame(step);
+        } else {
+          fadeFrameId = null;
+        }
+      };
+      fadeFrameId = global.requestAnimationFrame(step);
+    }
 
     function resizeCanvas() {
       const dpr = global.devicePixelRatio || 1;
@@ -508,36 +624,34 @@
       ctx.fillStyle = colors.background;
       ctx.fillRect(0, 0, width, height);
 
-      if (persistentPoint) {
-        ctx.beginPath();
-        ctx.arc(persistentPoint.x, persistentPoint.y, 18, 0, Math.PI * 2);
-        ctx.fillStyle = colors.circleFill;
-        ctx.fill();
-        ctx.lineWidth = 3.5;
-        ctx.strokeStyle = colors.circleStroke;
-        ctx.stroke();
-      }
-
       if (isTouching && activePoint) {
-        ctx.strokeStyle = colors.line;
-        ctx.lineWidth = 3.5;
-
-        ctx.beginPath();
-        ctx.moveTo(activePoint.x, 0);
-        ctx.lineTo(activePoint.x, height);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(0, activePoint.y);
-        ctx.lineTo(width, activePoint.y);
-        ctx.stroke();
+        drawOverlay(ctx, width, height, activePoint, 1, colors.ink, true);
+      } else if (fadePoint) {
+        const elapsed = global.performance.now() - fadeStartedAt;
+        const opacity = 1 - (elapsed / CONFIG.envelope.release);
+        if (opacity > 0) {
+          drawOverlay(ctx, width, height, fadePoint, opacity, colors.ink, true);
+        } else {
+          fadePoint = null;
+          fadeStartedAt = null;
+        }
       }
     }
 
+    function setBackground(color) {
+      if (!parseHexColor(color)) return;
+      colors.background = color;
+      colors.ink = inkFor(color);
+      root.style.background = color;
+      draw();
+    }
+
     function beginInteraction(clientX, clientY, source) {
+      stopFade();
       activePoint = getCanvasPoint(clientX, clientY);
       persistentPoint = { ...activePoint };
       isTouching = true;
+      emitTouch('down', activePoint);
       touchStartAt = global.performance.now();
       touchVoiceStarted = false;
       touchVoiceMode = null;
@@ -567,6 +681,7 @@
 
       activePoint = getCanvasPoint(clientX, clientY);
       persistentPoint = { ...activePoint };
+      emitTouch('move', activePoint);
       lastStatusNote = source + ' move';
       updateTouchParameters();
       draw();
@@ -581,6 +696,8 @@
       const wasShortTouch = touchDurationMs < CONFIG.touch.thresholdMs;
 
       clearTouchThresholdTimer();
+      emitTouch('up', persistentPoint);
+      startFade(persistentPoint);
       activePoint = null;
       isTouching = false;
 
@@ -804,9 +921,15 @@
       hide() {
         root.style.display = 'none';
       },
+      setBackground,
       destroy() {
         if (isPlaying) {
           stopSynth(80);
+        }
+        stopFade();
+        if (moveFrameId !== null) {
+          global.cancelAnimationFrame(moveFrameId);
+          moveFrameId = null;
         }
 
         canvas.removeEventListener('pointerdown', onPointerDown);
@@ -840,6 +963,8 @@
   global.AmbSynthEmbed = {
     mount,
     create: mount,
-    version: '0.3.0-original-parity'
+    inkFor,
+    drawOverlay,
+    version: '0.4.0-mirror'
   };
 })(typeof window !== 'undefined' ? window : this);

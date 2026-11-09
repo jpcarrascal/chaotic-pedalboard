@@ -3,7 +3,8 @@ const path = require('path');
 
 // Chaotic Pedalboard's app-specific server logic as a beatlink-core plugin:
 // device catalog + slot-to-device assignments, per-device CC runtime state,
-// host takeover, QR base URL, and the public-display snapshot. Everything
+// host takeover, QR base URL, the public-display snapshot, and participant
+// colors + ambsynth touch mirroring for the /ambgrid display. Everything
 // generic (sessions, roles, queue, slot timers, veil, MIDI transport) lives
 // in beatlink-core.
 
@@ -124,6 +125,55 @@ function normalizeQrBaseUrl(rawValue) {
     }
 }
 
+// --- participant colors + ambsynth players ----------------------------------
+
+// Background colors for participants' ambsynth; mirrored on the /ambgrid view.
+const PARTICIPANT_COLORS = [
+    '#e4572e', // coral
+    '#f2a541', // amber
+    '#8cb33a', // leaf
+    '#1f9e89', // teal
+    '#3a7bd5', // azure
+    '#6c4ab6', // violet
+    '#b8407a', // magenta
+    '#4a5160'  // graphite
+];
+
+function getParticipantColors(session) {
+    return session.getAttribute('participantColors');
+}
+
+// Least-used palette index (lowest on ties); colors repeat past 8 people.
+function assignParticipantColor(session, socketID) {
+    const colors = getParticipantColors(session);
+    if (colors[socketID] !== undefined) return PARTICIPANT_COLORS[colors[socketID]];
+    const counts = PARTICIPANT_COLORS.map(() => 0);
+    Object.values(colors).forEach((index) => { counts[index] += 1; });
+    const index = counts.indexOf(Math.min(...counts));
+    colors[socketID] = index;
+    return PARTICIPANT_COLORS[index];
+}
+
+function getAmbsynthPlayers(session) {
+    return session.getAttribute('ambsynthPlayers');
+}
+
+function ambsynthPlayerList(session) {
+    return Object.entries(getAmbsynthPlayers(session))
+        .map(([socketID, player]) => ({ socketID, ...player }));
+}
+
+function handshakeInitials(socket) {
+    const raw = socket.handshake && socket.handshake.query ? socket.handshake.query.initials : '';
+    return (typeof raw === 'string' && raw.trim() !== '') ? raw.trim() : 'GUEST';
+}
+
+function clampUnit(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return Math.min(1, Math.max(0, number));
+}
+
 function getSessionMode(session) {
     if (isTakeoverEnabled(session)) return 'takeover';
     return session.isPlaying() ? 'play' : 'pause';
@@ -183,6 +233,15 @@ function emitTrackAssignment(ctx, session, socketID, slot) {
     return true;
 }
 
+function emitAmbsynthPlayers(ctx, session, socketID) {
+    const payload = { players: ambsynthPlayerList(session) };
+    if (socketID) {
+        ctx.io.to(socketID).emit('ambsynth-players-updated', payload);
+    } else {
+        ctx.emitToRole(session.name, 'public', 'ambsynth-players-updated', payload);
+    }
+}
+
 function emitPublicSnapshot(ctx, session, socketID) {
     ctx.io.to(socketID).emit('public-session-snapshot', {
         configuredDevices: getConfiguredDevices(session),
@@ -228,7 +287,9 @@ module.exports = function midiPlugin(ctx) {
         deviceAssignments: {},   // slot -> { deviceId, deviceName, userInitials }
         deviceRuntimeStates: {}, // deviceId -> { controllers: {"cc:<n>": value}, updatedAt }
         takeover: { enabled: false, value: 127 },
-        qrBaseUrl: null
+        qrBaseUrl: null,
+        participantColors: {},   // socketID -> PARTICIPANT_COLORS index
+        ambsynthPlayers: {}      // socketID -> { initials, color } while on ambsynth
     });
 
     // Participants only get a slot when a pedal is free and no takeover is on.
@@ -280,11 +341,59 @@ module.exports = function midiPlugin(ctx) {
             socket.emit('turn-duration-updated', { seconds: session.config.turnTaking.threshold });
         } else if (role === 'public') {
             emitPublicSnapshot(ctx, session, socket.id);
+        } else if (role === 'participant') {
+            socket.emit('participant-color', { color: assignParticipantColor(session, socket.id) });
+        }
+    });
+
+    ctx.onDisconnect((socket, session, role) => {
+        if (!session || role !== 'participant') return;
+        delete getParticipantColors(session)[socket.id];
+        if (getAmbsynthPlayers(session)[socket.id]) {
+            delete getAmbsynthPlayers(session)[socket.id];
+            emitAmbsynthPlayers(ctx, session);
         }
     });
 
     ctx.on('request-public-session-snapshot', (socket, session) => {
         if (session) emitPublicSnapshot(ctx, session, socket.id);
+    });
+
+    // --- ambsynth mirroring (participants without a pedal -> /ambgrid) ---
+
+    ctx.on('request-ambsynth-players', (socket, session) => {
+        if (session) emitAmbsynthPlayers(ctx, session, socket.id);
+    });
+
+    // Track page reports when its embedded ambsynth is shown or hidden.
+    ctx.on('ambsynth-active', (socket, session, msg) => {
+        if (!session) return;
+        const colors = getParticipantColors(session);
+        if (colors[socket.id] === undefined) return; // participants only
+        const players = getAmbsynthPlayers(session);
+        const active = Boolean(msg && msg.active);
+        if (active === Boolean(players[socket.id])) return;
+        if (active) {
+            players[socket.id] = {
+                initials: handshakeInitials(socket),
+                color: PARTICIPANT_COLORS[colors[socket.id]]
+            };
+        } else {
+            delete players[socket.id];
+        }
+        emitAmbsynthPlayers(ctx, session);
+    });
+
+    // Touch events (normalized 0..1) relayed to public displays.
+    ctx.on('ambsynth-touch', (socket, session, msg) => {
+        if (!session || !msg || !getAmbsynthPlayers(session)[socket.id]) return;
+        if (!['down', 'move', 'up'].includes(msg.phase)) return;
+        const x = clampUnit(msg.x);
+        const y = clampUnit(msg.y);
+        if (x === null || y === null) return;
+        ctx.emitToRole(session.name, 'public', 'ambsynth-touch', {
+            socketID: socket.id, phase: msg.phase, x, y
+        });
     });
 
     // Track asks for its current device assignment (e.g. after reconnect).

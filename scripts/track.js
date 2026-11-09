@@ -36,6 +36,22 @@ const midiActivity = document.getElementById("midi-activity");
 const queueMessageElement = document.getElementById("queue-message");
 const slotCountdownElement = document.getElementById("slot-countdown");
 let waitingSynthInstance = null;
+let participantColor = null; // server-assigned ambsynth background
+let waitingSynthActive = false;
+
+function emitWaitingSynthActive(active) {
+    if (waitingSynthActive === active) return;
+    waitingSynthActive = active;
+    if (socket && socket.connected) {
+        socket.emit('ambsynth-active', { active });
+    }
+}
+
+function emitWaitingSynthTouch(touch) {
+    if (socket && socket.connected) {
+        socket.emit('ambsynth-touch', touch);
+    }
+}
 
 function ensureWaitingSynthRoot() {
     let root = document.getElementById('waiting-synth-root');
@@ -65,11 +81,14 @@ function showWaitingSynth() {
     waitingSynthRoot.style.display = 'block';
 
     if (!waitingSynthInstance && window.AmbSynthEmbed) {
-        waitingSynthInstance = window.AmbSynthEmbed.mount(waitingSynthRoot, {
+        const synthOptions = {
             showHud: false,
             minHeight: '100%',
-            borderRadius: '8px'
-        });
+            borderRadius: '8px',
+            onTouch: emitWaitingSynthTouch
+        };
+        if (participantColor) synthOptions.background = participantColor;
+        waitingSynthInstance = window.AmbSynthEmbed.mount(waitingSynthRoot, synthOptions);
     }
 
     if (waitingSynthInstance && typeof waitingSynthInstance.show === 'function') {
@@ -77,6 +96,7 @@ function showWaitingSynth() {
     } else {
         waitingSynthRoot.style.display = 'block';
     }
+    emitWaitingSynthActive(true);
 }
 
 function hideWaitingSynth() {
@@ -89,6 +109,7 @@ function hideWaitingSynth() {
     if (waitingSynthRoot) {
         waitingSynthRoot.style.display = 'none';
     }
+    emitWaitingSynthActive(false);
 }
 
 function setDeviceInfoVisible(visible) {
@@ -124,6 +145,7 @@ if(!initials && session) { // No initials == no socket connection
     socket = io("", {query:{initials: initials, session: session, role: "participant"}});
     
     socket.on("connect", () => {
+        waitingSynthActive = false; // new socket: server has no ambsynth state for us yet
         setCookie("retries", 0, 1000); 
         retries = 0;
         console.log("Connected, my socketID:" + socket.id);
@@ -224,6 +246,15 @@ if(!initials && session) { // No initials == no socket connection
     });
 
     /* ----------- Socket messages ------------ */
+
+    // Per-participant ambsynth background (mirrored on /ambgrid).
+    socket.on('participant-color', function(msg) {
+        if (!msg || !msg.color) return;
+        participantColor = msg.color;
+        if (waitingSynthInstance && typeof waitingSynthInstance.setBackground === 'function') {
+            waitingSynthInstance.setBackground(participantColor);
+        }
+    });
 
     // Device assignment message - handles all track data including device color
     socket.on('track-assignment', function(msg) {

@@ -37,13 +37,40 @@
       #grid-status.hidden {
         display: none;
       }
+
+      /* Join QR overlay: toggled from the sequencer or with q; click/Esc closes. */
+      #qr-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 12, 16, 0.88);
+        cursor: pointer;
+      }
+
+      #qr-overlay.hidden {
+        display: none;
+      }
+
+      #qr-overlay img {
+        width: 85vmin;
+        height: 85vmin;
+        box-sizing: border-box;
+        padding: 3vmin; /* white quiet zone for reliable scanning */
+        background: #ffffff;
+        border-radius: 1.5vmin;
+        image-rendering: pixelated;
+      }
     </style>
   </head>
   <body>
     <canvas id="grid"></canvas>
     <div id="grid-status">Connecting...</div>
+    <div id="qr-overlay" class="hidden"><img id="qr-image" alt="Scan to join"></div>
 
     <script src="https://cdn.socket.io/4.4.0/socket.io.min.js"></script>
+    <script src="/node_modules/qrcodejs/qrcode.min.js"></script>
     <script src="scripts/ambsynthEmbed.js"></script>
     <script src="scripts/grid.js"></script>
   </body>

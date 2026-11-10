@@ -34,6 +34,9 @@ const grid = {
     ripples: new Map(),          // socketID -> [{ x, y, startedAt }] after lift (overlap)
     areas: null,                 // { devices, ambsynth, labelH }
     layouts: { devices: null, ambsynth: null },
+    qrBaseUrl: null,             // from the sequencer's QR Base URL setting
+    qrVisible: false,            // join QR overlay (server-held, shared with the sequencer)
+    qrRenderedFor: null,         // join URL the current QR image encodes
     canvas: document.getElementById('grid'),
     statusEl: document.getElementById('grid-status')
 };
@@ -271,7 +274,7 @@ function render() {
                 drawPlayerCell(ctx, cellRect(grid.layouts.ambsynth, ambArea, index), player, now);
             });
         } else {
-            drawEmptyMessage(ctx, ambArea, 'Waiting for ambsynth players...');
+            drawEmptyMessage(ctx, ambArea, 'Waiting for Ambient Synth players...');
         }
     }
     requestAnimationFrame(render);
@@ -281,6 +284,61 @@ function setStatus(text) {
     grid.statusEl.textContent = text || '';
     grid.statusEl.classList.toggle('hidden', !text);
 }
+
+// --- join QR overlay -----------------------------------------------------------
+
+const qrOverlayEl = document.getElementById('qr-overlay');
+const qrImageEl = document.getElementById('qr-image');
+
+// Same join link as /public: QR base URL (or this origin) + /track?session=.
+function buildJoinUrl() {
+    const base = `${(grid.qrBaseUrl || window.location.origin).replace(/\/+$/, '')}/track`;
+    return `${base}?session=${encodeURIComponent(grid.sessionName)}`;
+}
+
+function renderQrImage() {
+    const url = buildJoinUrl();
+    if (url === grid.qrRenderedFor || typeof window.QRCode !== 'function') return;
+    const temp = document.createElement('div');
+    temp.style.position = 'fixed';
+    temp.style.left = '-9999px';
+    document.body.appendChild(temp);
+    try {
+        new window.QRCode(temp, {
+            text: url,
+            width: 1024,
+            height: 1024,
+            correctLevel: window.QRCode.CorrectLevel.M
+        });
+        const canvas = temp.querySelector('canvas');
+        const img = temp.querySelector('img');
+        const dataUrl = (canvas && canvas.toDataURL) ? canvas.toDataURL('image/png') : (img && img.src);
+        if (dataUrl) {
+            qrImageEl.src = dataUrl;
+            grid.qrRenderedFor = url;
+        }
+    } finally {
+        document.body.removeChild(temp);
+    }
+}
+
+function applyQrOverlay() {
+    if (grid.qrVisible) renderQrImage();
+    qrOverlayEl.classList.toggle('hidden', !grid.qrVisible);
+}
+
+function setQrOverlay(visible) {
+    if (grid.socket && grid.socket.connected) {
+        grid.socket.emit('set-qr-overlay', { visible }); // server echoes the new state
+    }
+}
+
+qrOverlayEl.addEventListener('click', () => setQrOverlay(false));
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (e.key === 'q' || e.key === 'Q') setQrOverlay(!grid.qrVisible);
+    else if (e.key === 'Escape' && grid.qrVisible) setQrOverlay(false);
+});
 
 // --- socket -------------------------------------------------------------------
 
@@ -344,6 +402,18 @@ function initSocket() {
     grid.socket.on('session-unavailable', msg => setStatus((msg && msg.reason) || 'Session unavailable.'));
     grid.socket.on('session-ended', () => setStatus('Session ended.'));
     grid.socket.on('public-session-snapshot', onDevicesUpdated);
+    grid.socket.on('public-session-snapshot', (data) => {
+        grid.qrBaseUrl = (data && data.qrBaseUrl) || null;
+        applyQrOverlay();
+    });
+    grid.socket.on('qr-base-url-updated', (data) => {
+        grid.qrBaseUrl = (data && data.baseUrl) || null;
+        applyQrOverlay();
+    });
+    grid.socket.on('qr-overlay-updated', (msg) => {
+        grid.qrVisible = Boolean(msg && msg.visible);
+        applyQrOverlay();
+    });
     grid.socket.on('public-device-assignments-updated', onDevicesUpdated);
     grid.socket.on('device-activity', (msg) => {
         if (msg && msg.deviceId !== undefined && msg.deviceId !== null) {

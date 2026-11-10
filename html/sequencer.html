@@ -63,6 +63,10 @@
           🛑 Panic All
         </button>
 
+        <button id="qr-overlay-toggle" class="control-btn" title="Show/hide the join QR code on the grid display (shortcut: q)">
+          📱 Show QR Code
+        </button>
+
         <div id="view-controls">
           <div id="view-buttons">
             <button id="device-config-toggle" class="control-btn" title="Configure MIDI devices">
@@ -199,7 +203,6 @@
         <div id="track-url-display">
           <code id="track-url">Loading...</code>
           <button id="copy-url" title="Copy URL to clipboard">📋</button>
-          <button id="qr-url" title="Show QR code">QR</button>
         </div>
         <div id="qr-base-url-controls">
           <label for="qr-base-url-input">QR Base URL:</label>
@@ -271,15 +274,6 @@
       </div>
     </div>
 
-    <!-- QR Code Modal -->
-    <div id="qr-code-modal" class="modal hidden">
-      <div class="modal-overlay" onclick="closeQrModal()"></div>
-      <div class="modal-content qr-modal-content">
-        <button id="close-qr-modal" class="close-btn" onclick="closeQrModal()">✕</button>
-        <img id="qr-code-image" src="" alt="QR Code" class="qr-code-image">
-      </div>
-    </div>
-
     <!-- Scripts -->
     <script src="https://cdn.socket.io/4.4.0/socket.io.min.js"></script>
     <script src="scripts/config.js"></script>
@@ -288,7 +282,6 @@
     <script src="scripts/routingMatrix.js"></script>
     <script src="scripts/midiRouting.js"></script>
     <script src="scripts/deviceConfiguration.js"></script>
-    <script src="/node_modules/qrcodejs/qrcode.min.js"></script>
     <script src="scripts/sequencer.js"></script>
   </body>
 </html>

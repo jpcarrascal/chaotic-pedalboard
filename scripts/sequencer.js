@@ -18,6 +18,7 @@ let app = {
     sessionMode: 'pause',
     deviceAssignments: {}, // Maps trackNumber -> {deviceId, deviceName, userInitials}
     deviceRuntimeStates: {},
+    qrOverlayVisible: false,
     takeover: {
         value: 127
     },
@@ -213,6 +214,7 @@ function initializeElements() {
         pauseButton: document.getElementById('pause-button'),
         takeoverButton: document.getElementById('takeover-button'),
         panicAllButton: document.getElementById('panic-all'),
+        qrOverlayToggle: document.getElementById('qr-overlay-toggle'),
         slotDurationInput: document.getElementById('slot-duration'),
         slotDurationApplyButton: document.getElementById('slot-duration-apply'),
         deviceConfigToggle: document.getElementById('device-config-toggle'),
@@ -231,7 +233,6 @@ function initializeElements() {
         noTracksMessage: document.getElementById('no-tracks-message'),
         trackUrl: document.getElementById('track-url'),
         copyUrlButton: document.getElementById('copy-url'),
-        qrUrlButton: document.getElementById('qr-url'),
         qrBaseUrlInput: document.getElementById('qr-base-url-input'),
         qrBaseUrlApplyButton: document.getElementById('qr-base-url-apply'),
         qrBaseUrlResetButton: document.getElementById('qr-base-url-reset'),
@@ -349,6 +350,7 @@ function initializeSocket() {
     app.socket.on('device-runtime-state-updated', onDeviceRuntimeStateUpdated);
     app.socket.on('queue-updated', onQueueUpdated);
     app.socket.on('session-mode-updated', onSessionModeUpdated);
+    app.socket.on('qr-overlay-updated', onQrOverlayUpdated);
     app.socket.on('takeover-state-updated', onTakeoverStateUpdated);
     app.socket.on('takeover-error', onTakeoverError);
     app.socket.on('turn-duration-updated', onSlotDurationUpdated);
@@ -413,6 +415,7 @@ function setupEventListeners() {
     app.elements.pauseButton.addEventListener('click', () => setSessionMode('pause'));
     app.elements.takeoverButton.addEventListener('click', () => setSessionMode('takeover'));
     app.elements.panicAllButton.addEventListener('click', onPanicAll);
+    app.elements.qrOverlayToggle.addEventListener('click', toggleQrOverlay);
     app.elements.slotDurationApplyButton.addEventListener('click', onApplySlotDuration);
     app.elements.slotDurationInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -436,9 +439,6 @@ function setupEventListeners() {
     
     // Copy URL button
     app.elements.copyUrlButton.addEventListener('click', onCopyUrl);
-    
-    // QR URL button
-    app.elements.qrUrlButton.addEventListener('click', onShowQrCode);
 
     if (app.elements.qrBaseUrlApplyButton) {
         app.elements.qrBaseUrlApplyButton.addEventListener('click', applyQrBaseUrlFromInput);
@@ -462,11 +462,13 @@ function setupEventListeners() {
         app.elements.takeoverFader.addEventListener('input', onTakeoverFaderInput);
     }
     
-    // ESC key handler for QR modal
+    // 'q' toggles the join QR overlay on the grid display (not while typing).
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeQrModal();
-        }
+        if (e.key !== 'q' && e.key !== 'Q') return;
+        if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+        const target = e.target;
+        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+        toggleQrOverlay();
     });
 }
 
@@ -1029,71 +1031,20 @@ function onCopyUrl() {
     });
 }
 
-function onShowQrCode() {
-    const url = app.elements.trackUrl.textContent;
-    if (!url || url === 'Loading...') {
-        showError('URL not ready yet');
+// Join QR overlay on the grid display. The server holds the state and
+// broadcasts every change, so the button follows toggles made on the grid.
+function toggleQrOverlay() {
+    if (!app.socket || !app.socket.connected) {
+        showError('Connect to the session before showing the QR code.');
         return;
     }
-
-    // Show modal
-    const modal = document.getElementById('qr-code-modal');
-    const qrImage = document.getElementById('qr-code-image');
-
-    if (typeof window.QRCode !== 'function') {
-        showError('QR library is not loaded');
-        return;
-    }
-
-    // Set up image load handlers
-    qrImage.onload = () => {
-        modal.classList.remove('hidden');
-    };
-
-    qrImage.onerror = () => {
-        showError('Failed to render QR code');
-    };
-
-    const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'fixed';
-    tempContainer.style.left = '-9999px';
-    tempContainer.style.top = '-9999px';
-    document.body.appendChild(tempContainer);
-
-    try {
-        new window.QRCode(tempContainer, {
-            text: url,
-            width: 1024,
-            height: 1024,
-            correctLevel: window.QRCode.CorrectLevel.M
-        });
-    } catch (error) {
-        document.body.removeChild(tempContainer);
-        showError('Failed to generate QR code');
-        return;
-    }
-
-    window.setTimeout(() => {
-        const renderedImg = tempContainer.querySelector('img');
-        const renderedCanvas = tempContainer.querySelector('canvas');
-        const dataUrl = renderedImg?.src || (renderedCanvas && renderedCanvas.toDataURL ? renderedCanvas.toDataURL('image/png') : '');
-
-        document.body.removeChild(tempContainer);
-
-        if (!dataUrl) {
-            showError('Failed to generate QR code');
-            return;
-        }
-
-        qrImage.src = dataUrl;
-    }, 0);
+    app.socket.emit('set-qr-overlay', { visible: !app.qrOverlayVisible });
 }
 
-function closeQrModal() {
-    const modal = document.getElementById('qr-code-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
+function onQrOverlayUpdated(msg) {
+    app.qrOverlayVisible = Boolean(msg && msg.visible);
+    app.elements.qrOverlayToggle.textContent = app.qrOverlayVisible ? '📱 Hide QR Code' : '📱 Show QR Code';
+    app.elements.qrOverlayToggle.classList.toggle('active', app.qrOverlayVisible);
 }
 
 // ===== UI UPDATE FUNCTIONS =====

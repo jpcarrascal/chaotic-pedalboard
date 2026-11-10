@@ -153,6 +153,35 @@ describe('chaotic-pedalboard server', () => {
         expect(events).toHaveLength(1);
     });
 
+    test('QR overlay state is shared by host and displays; participants cannot set it', async () => {
+        const host = await setupHostWithDevices('s17', [DEVICES[0]]);
+        const display = connect({ role: 'public', session: 's17' });
+        expect(await waitFor(display, 'qr-overlay-updated')).toEqual({ visible: false });
+
+        // Sequencer shows it -> display and host both get the new state.
+        const displayOn = waitForMatch(display, 'qr-overlay-updated', m => m.visible === true);
+        const hostOn = waitForMatch(host, 'qr-overlay-updated', m => m.visible === true);
+        host.emit('set-qr-overlay', { visible: true });
+        await Promise.all([displayOn, hostOn]);
+
+        // A display opened later starts with the current state.
+        const late = connect({ role: 'public', session: 's17' });
+        expect(await waitFor(late, 'qr-overlay-updated')).toEqual({ visible: true });
+
+        // A participant can't toggle it.
+        const track = connect({ role: 'participant', session: 's17', initials: 'JP' });
+        await waitFor(track, 'track-assignment');
+        track.emit('set-qr-overlay', { visible: false });
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(server.sessions.get('s17').getAttribute('qrOverlayVisible')).toBe(true);
+
+        // A display (grid q / click / Esc) hides it -> the sequencer follows.
+        const hostOff = waitForMatch(host, 'qr-overlay-updated', m => m.visible === false);
+        display.emit('set-qr-overlay', { visible: false });
+        await hostOff;
+        expect(server.sessions.get('s17').getAttribute('qrOverlayVisible')).toBe(false);
+    });
+
     test('takeover suspends participants and blocks MIDI; disabling promotes them back', async () => {
         const host = await setupHostWithDevices('s4', [DEVICES[0]]);
 

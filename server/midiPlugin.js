@@ -307,7 +307,9 @@ module.exports = function midiPlugin(ctx) {
         qrBaseUrl: null,
         participantColors: {},   // socketID -> PARTICIPANT_COLORS index
         ambsynthPlayers: {},     // socketID -> { initials, color } while on ambsynth
-        deviceActivityAt: {}     // deviceId -> last 'device-activity' emit (ms), for throttling
+        deviceActivityAt: {},    // deviceId -> last 'device-activity' emit (ms), for throttling
+        qrOverlayVisible: false, // join QR overlay on /grid, toggled from sequencer or grid
+        publicDisplays: {}       // socketID -> true for connected public displays
     });
 
     // Participants only get a slot when a pedal is free and no takeover is on.
@@ -361,14 +363,18 @@ module.exports = function midiPlugin(ctx) {
             emitTakeoverState(ctx, session);
             emitSessionMode(ctx, session);
             socket.emit('turn-duration-updated', { seconds: session.config.turnTaking.threshold });
+            socket.emit('qr-overlay-updated', { visible: session.getAttribute('qrOverlayVisible') });
         } else if (role === 'public') {
+            session.getAttribute('publicDisplays')[socket.id] = true;
             emitPublicSnapshot(ctx, session, socket.id);
+            socket.emit('qr-overlay-updated', { visible: session.getAttribute('qrOverlayVisible') });
         } else if (role === 'participant') {
             socket.emit('participant-color', { color: assignParticipantColor(session, socket.id) });
         }
     });
 
     ctx.onDisconnect((socket, session, role) => {
+        if (session && role === 'public') delete session.getAttribute('publicDisplays')[socket.id];
         if (!session || role !== 'participant') return;
         delete getParticipantColors(session)[socket.id];
         if (getAmbsynthPlayers(session)[socket.id]) {
@@ -537,6 +543,19 @@ module.exports = function midiPlugin(ctx) {
         if (!normalized) return;
         session.setAttribute('qrBaseUrl', normalized);
         ctx.emitToSession(session.name, 'qr-base-url-updated', { baseUrl: normalized });
+    });
+
+    // Join QR overlay on /grid: host (sequencer button / 'q') or a public
+    // display (grid 'q', click, Esc) sets it; everyone gets the new state so
+    // the sequencer button and all grids stay in sync.
+    ctx.on('set-qr-overlay', (socket, session, msg) => {
+        if (!session) return;
+        const isDisplay = Boolean(session.getAttribute('publicDisplays')[socket.id]);
+        if (!ctx.requireHost(socket, session) && !isDisplay) return;
+        const visible = Boolean(msg && msg.visible);
+        session.setAttribute('qrOverlayVisible', visible);
+        ctx.emitToHost(session, 'qr-overlay-updated', { visible });
+        ctx.emitToRole(session.name, 'public', 'qr-overlay-updated', { visible });
     });
 
     // Play/Pause leave takeover mode (the sequencer relies on this) and keep

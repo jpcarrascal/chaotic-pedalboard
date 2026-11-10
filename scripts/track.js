@@ -136,7 +136,8 @@ function applyPedalViewBackground() {
 
 function setDeviceInfoVisible(visible) {
     if (!deviceInfoElement) return;
-    deviceInfoElement.style.display = visible ? 'block' : 'none';
+    // '' (not 'block') so the stylesheet's display applies (flex in portrait).
+    deviceInfoElement.style.display = visible ? '' : 'none';
     // Initials watermark only while a pedal is assigned (ambsynth draws its own).
     if (pedalInitialsElement) {
         pedalInitialsElement.style.display = (visible && assignedDevice) ? 'block' : 'none';

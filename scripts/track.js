@@ -35,7 +35,6 @@ var maxRetries = 3;
 
 // DOM Elements
 const deviceNameElement = document.getElementById("device-name");
-const trackInfoElement = document.getElementById("track-info");
 const deviceInfoElement = document.getElementById("device-info");
 const deviceImageElement = document.getElementById("device-image");
 const controllerContainer = document.getElementById("controller-container");
@@ -43,6 +42,8 @@ const connectionStatus = document.getElementById("connection-status");
 const midiActivity = document.getElementById("midi-activity");
 const queueMessageElement = document.getElementById("queue-message");
 const slotCountdownElement = document.getElementById("slot-countdown");
+const pedalInitialsElement = document.getElementById("pedal-initials");
+if (pedalInitialsElement) pedalInitialsElement.textContent = initials || '';
 let waitingSynthInstance = null;
 let participantColor = null; // server-assigned ambsynth background
 let waitingSynthActive = false;
@@ -128,11 +129,18 @@ function applyPedalViewBackground() {
     if (!color) return;
     document.body.style.backgroundColor = color;
     document.body.style.color = getContrastColor(color);
+    if (pedalInitialsElement && window.AmbSynthEmbed) {
+        pedalInitialsElement.style.color = window.AmbSynthEmbed.inkFor(color); // same ink as ambsynth
+    }
 }
 
 function setDeviceInfoVisible(visible) {
     if (!deviceInfoElement) return;
     deviceInfoElement.style.display = visible ? 'block' : 'none';
+    // Initials watermark only while a pedal is assigned (ambsynth draws its own).
+    if (pedalInitialsElement) {
+        pedalInitialsElement.style.display = (visible && assignedDevice) ? 'block' : 'none';
+    }
 }
 
 function setCountdownVisible(visible) {
@@ -291,7 +299,6 @@ if(!initials && session) { // No initials == no socket connection
                 showWaitingSynth();
             }
             setDeviceInfoVisible(Boolean(msg.device));
-            trackInfoElement.textContent = `Track ${msg.trackNumber}`;
             console.log("Updating device interface with:", msg.device);
             updateDeviceInterface(msg.device);
 
@@ -319,7 +326,6 @@ if(!initials && session) { // No initials == no socket connection
             ? msg.message
             : fallbackMessage;
         setQueueMessage(`${message} Play with this synth in the meantime:`);
-        trackInfoElement.textContent = 'Track Controller';
         showWaitingSynth();
         if (msg && msg.takeover) {
             document.getElementById("veil").style.display = "none";
@@ -456,7 +462,10 @@ function updateDeviceInterface(device) {
 
     console.log("Track received device:", device.name, "with controllers:", device.controllers);
     console.log("Track received device color:", device.color);
-    deviceNameElement.textContent = device.name || "Unknown Device";
+    const prefixElement = document.createElement('span');
+    prefixElement.className = 'device-name-prefix';
+    prefixElement.textContent = "You're controlling: ";
+    deviceNameElement.replaceChildren(prefixElement, device.name || "Unknown Device");
 
     if (deviceImageElement) {
         if (device.image) {

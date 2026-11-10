@@ -522,12 +522,30 @@ module.exports = function midiPlugin(ctx) {
         ctx.emitToSession(session.name, 'qr-base-url-updated', { baseUrl: normalized });
     });
 
-    // Keep the sequencer's mode indicator in sync with core play/pause.
+    // Play/Pause leave takeover mode (the sequencer relies on this) and keep
+    // its mode indicator in sync with core play/pause.
+    function exitTakeover(session) {
+        if (!isTakeoverEnabled(session)) return false;
+        const takeover = getTakeover(session);
+        takeover.enabled = false;
+        takeover.value = 127;
+        emitTakeoverState(ctx, session);
+        emitDeviceAssignments(ctx, session);
+        return true;
+    }
+
     ctx.on('session-play', (socket, session) => {
-        if (ctx.requireHost(socket, session)) emitSessionMode(ctx, session);
+        if (!ctx.requireHost(socket, session)) return;
+        const exited = exitTakeover(session);
+        emitSessionMode(ctx, session);
+        // Core's own play handler already tried to promote, but the takeover
+        // gate blocked it; retry now that takeover is off.
+        if (exited) ctx.turnTaking.tryPromote(session.name);
     });
     ctx.on('session-pause', (socket, session) => {
-        if (ctx.requireHost(socket, session)) emitSessionMode(ctx, session);
+        if (!ctx.requireHost(socket, session)) return;
+        exitTakeover(session);
+        emitSessionMode(ctx, session);
     });
 
     ctx.route('get', '/api/pedal-images', (req, res) => {

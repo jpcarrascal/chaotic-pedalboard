@@ -2,7 +2,7 @@
 <html>
   <head>
     <title>Chaotic Pedalboard - Track Controller</title>
-    <link rel="stylesheet" href="css/track.css?v=14">
+    <link rel="stylesheet" href="css/track.css?v=16">
     <link rel="stylesheet" href="css/color-transitions.css">
     <link href='https://fonts.googleapis.com/css?family=Montserrat' rel='stylesheet'>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -44,7 +44,6 @@
           <img id="device-image" class="device-image" src="" alt="Assigned pedal image" style="display:none;">
           <div class="device-text-content">
             <h2 id="device-name">No Pedal Assigned</h2>
-            <p id="track-info">Track Controller</p>
             <p id="slot-countdown">Remaining: --:--</p>
           </div>
         </div>
@@ -55,6 +54,11 @@
       <!-- Dynamic controller container -->
       <div id="controller-container">
         <!-- Controllers will be dynamically generated here -->
+      </div>
+
+      <!-- Participant initials watermark (pedal view), styled like the ambsynth's -->
+      <div id="pedal-initials-anchor" aria-hidden="true">
+        <div id="pedal-initials"></div>
       </div>
 
       <!-- Status display -->

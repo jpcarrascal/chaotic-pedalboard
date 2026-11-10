@@ -575,11 +575,9 @@
     };
     const initialsLabel = typeof config.initials === 'string' ? config.initials : '';
 
-    // Long touch: circle + crosshair fade after lift (cut off by a new touch).
-    // Short tap: ripple ring; ripples overlap and outlive new touches.
-    // Both last CONFIG.envelope.release (matches the sound release).
-    let fadePoint = null;
-    let fadeStartedAt = null;
+    // On lift (short or long touch) the crosshair disappears and the circle
+    // becomes a ripple that grows and fades over CONFIG.envelope.release
+    // (matches the sound release). Ripples overlap and outlive new touches.
     let ripples = []; // [{ point, startedAt }]
     let animationFrameId = null;
 
@@ -621,12 +619,12 @@
       onTouch({ phase, ...normalizedPoint(point), ...(extra || {}) });
     }
 
-    // Redraws every frame while a fade or ripple is running.
+    // Redraws every frame while a ripple is running.
     function ensureAnimating() {
       if (animationFrameId !== null) return;
       const step = () => {
         draw();
-        animationFrameId = (fadePoint || ripples.length > 0)
+        animationFrameId = ripples.length > 0
           ? global.requestAnimationFrame(step)
           : null;
       };
@@ -640,22 +638,10 @@
       }
     }
 
-    // Cuts off the long-touch fade only; ripples keep going.
-    function stopFade() {
-      fadePoint = null;
-      fadeStartedAt = null;
-    }
-
-    function startFade(point, isShortTap) {
-      stopFade();
+    function startRipple(point) {
       if (!point) return;
-      if (isShortTap) {
-        ripples.push({ point: { ...point }, startedAt: global.performance.now() });
-        if (ripples.length > MAX_RIPPLES) ripples = ripples.slice(-MAX_RIPPLES);
-      } else {
-        fadePoint = { ...point };
-        fadeStartedAt = global.performance.now();
-      }
+      ripples.push({ point: { ...point }, startedAt: global.performance.now() });
+      if (ripples.length > MAX_RIPPLES) ripples = ripples.slice(-MAX_RIPPLES);
       ensureAnimating();
     }
 
@@ -696,13 +682,6 @@
 
       if (isTouching && activePoint) {
         drawOverlay(ctx, width, height, activePoint, 1, colors.ink, true);
-      } else if (fadePoint) {
-        const opacity = 1 - ((now - fadeStartedAt) / fadeMs);
-        if (opacity > 0) {
-          drawOverlay(ctx, width, height, fadePoint, opacity, colors.ink, true);
-        } else {
-          stopFade();
-        }
       }
     }
 
@@ -715,7 +694,6 @@
     }
 
     function beginInteraction(clientX, clientY, source) {
-      stopFade();
       activePoint = getCanvasPoint(clientX, clientY);
       persistentPoint = { ...activePoint };
       isTouching = true;
@@ -765,7 +743,7 @@
 
       clearTouchThresholdTimer();
       emitTouch('up', persistentPoint, { short: wasShortTouch });
-      startFade(persistentPoint, wasShortTouch);
+      startRipple(persistentPoint);
       activePoint = null;
       isTouching = false;
 
@@ -994,7 +972,6 @@
         if (isPlaying) {
           stopSynth(80);
         }
-        stopFade();
         ripples = [];
         stopAnimating();
         if (moveFrameId !== null) {

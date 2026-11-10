@@ -153,6 +153,78 @@ describe('chaotic-pedalboard server', () => {
         expect(envelope.message).toEqual([0xB0, 74, 2]);
     });
 
+    test('session-play exits takeover: mode is play and queued participants are promoted', async () => {
+        const host = await setupHostWithDevices('s13', [DEVICES[0]]);
+        const track = connect({ role: 'participant', session: 's13', initials: 'JP' });
+        await waitFor(track, 'track-assignment');
+
+        const suspendedPromise = waitForMatch(track, 'queue-status', m => m.message.includes('suspended'));
+        const takeoverOnPromise = waitForMatch(host, 'takeover-state-updated', m => m.takeover.enabled);
+        host.emit('set-takeover-state', { enabled: true, value: 100 });
+        await Promise.all([suspendedPromise, takeoverOnPromise]);
+
+        const modePromise = waitForMatch(host, 'session-mode-updated', m => m.mode === 'play');
+        const takeoverOffPromise = waitForMatch(host, 'takeover-state-updated',
+            m => m.takeover.enabled === false && m.takeover.value === 127);
+        const promotedPromise = waitForMatch(track, 'track-assignment', m => m.device && m.device.id === 1);
+        host.emit('session-play');
+        await Promise.all([modePromise, takeoverOffPromise, promotedPromise]);
+    });
+
+    test('session-pause exits takeover: mode is pause', async () => {
+        const host = await setupHostWithDevices('s14', [DEVICES[0]]);
+        const takeoverOnPromise = waitForMatch(host, 'takeover-state-updated', m => m.takeover.enabled);
+        host.emit('set-takeover-state', { enabled: true, value: 100 });
+        await takeoverOnPromise;
+
+        const modePromise = waitForMatch(host, 'session-mode-updated', m => m.mode === 'pause');
+        const takeoverOffPromise = waitForMatch(host, 'takeover-state-updated', m => m.takeover.enabled === false);
+        host.emit('session-pause');
+        await Promise.all([modePromise, takeoverOffPromise]);
+    });
+
+    test('mode cycle: pause/play/takeover switch cleanly in any order', async () => {
+        const host = await setupHostWithDevices('s15', [DEVICES[0]]);
+        const session = server.sessions.get('s15');
+        const track = connect({ role: 'participant', session: 's15', initials: 'JP' });
+        await waitFor(track, 'track-assignment');
+
+        const actions = {
+            play: () => host.emit('session-play'),
+            pause: () => host.emit('session-pause'),
+            takeover: () => host.emit('set-takeover-state', { enabled: true, value: 100 })
+        };
+
+        // Each step must report the new mode and leave consistent server state.
+        async function step(mode) {
+            const modePromise = waitForMatch(host, 'session-mode-updated', m => m.mode === mode);
+            actions[mode]();
+            await modePromise;
+            expect(session.getAttribute('takeover').enabled).toBe(mode === 'takeover');
+            expect(session.isPlaying()).toBe(mode === 'play');
+        }
+
+        expect(session.isPlaying()).toBe(false); // sessions start paused
+        await step('play');
+        await step('pause');
+        await step('takeover');                   // from pause
+        await step('play');
+
+        // Takeover from play pauses the session and veils participants.
+        const veilPromise = waitFor(track, 'veil-on');
+        await step('takeover');
+        await veilPromise;
+        expect(session.participants.activeCount()).toBe(0);
+
+        await step('pause');
+
+        // Back to play: the queued participant gets a pedal again.
+        const promotedPromise = waitForMatch(track, 'track-assignment', m => m.device && m.device.id === 1);
+        await step('play');
+        await promotedPromise;
+        expect(session.participants.activeCount()).toBe(1);
+    });
+
     test('set-takeover-value writes all configured controllers', async () => {
         const host = await setupHostWithDevices('s5', DEVICES);
         const enabledPromise = waitForMatch(host, 'takeover-state-updated', m => m.takeover.enabled);

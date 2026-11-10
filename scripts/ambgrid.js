@@ -1,12 +1,12 @@
 // Ambsynth grid: public display mirroring every participant currently playing
 // the waiting ambsynth (no pedal). One portrait cell per player, colored with
 // their server-assigned background; touches are mirrored with the same
-// circle + crosshair and 2s fade-out as on the phone.
+// circle + crosshair while touching and the same 2s ripple on lift.
 
 const AMBGRID = {
     cellAspect: 9 / 16,      // width / height
     gapRatio: 0.015,         // gap as a fraction of the shorter window side
-    fadeMs: 2000,            // matches ambsynth envelope release
+    fadeMs: 2000,            // ripple duration; matches ambsynth envelope release
     cornerRadiusRatio: 0.04
 };
 
@@ -14,8 +14,8 @@ const ambgrid = {
     sessionName: new URLSearchParams(window.location.search).get('session') || '',
     socket: null,
     players: [],             // [{ socketID, initials, color, ink }]
-    touches: new Map(),      // socketID -> { x, y, touching, releasedAt } (crosshair)
-    ripples: new Map(),      // socketID -> [{ x, y, startedAt }] (short taps, overlap)
+    touches: new Map(),      // socketID -> { x, y } while touching (circle + crosshair)
+    ripples: new Map(),      // socketID -> [{ x, y, startedAt }] after lift (overlap)
     layout: null,
     canvas: document.getElementById('ambgrid'),
     statusEl: document.getElementById('ambgrid-status')
@@ -105,15 +105,8 @@ function drawCell(ctx, rect, player, now) {
 
     const touch = ambgrid.touches.get(player.socketID);
     if (touch) {
-        let opacity = 1;
-        if (!touch.touching) {
-            opacity = 1 - (now - touch.releasedAt) / AMBGRID.fadeMs;
-            if (opacity <= 0) ambgrid.touches.delete(player.socketID);
-        }
-        if (opacity > 0) {
-            const point = { x: touch.x * rect.w, y: touch.y * rect.h };
-            window.AmbSynthEmbed.drawOverlay(ctx, rect.w, rect.h, point, opacity, player.ink, true);
-        }
+        const point = { x: touch.x * rect.w, y: touch.y * rect.h };
+        window.AmbSynthEmbed.drawOverlay(ctx, rect.w, rect.h, point, 1, player.ink, true);
     }
     ctx.restore();
 }
@@ -164,22 +157,15 @@ function onPlayersUpdated(msg) {
 
 function onTouch(msg) {
     if (!msg || !msg.socketID) return;
-    const now = performance.now();
-    if (msg.phase === 'up' && msg.short) {
-        // Short tap: add a ripple (older ones keep going); no crosshair fade.
+    if (msg.phase === 'up') {
+        // Lift: crosshair goes away, a ripple starts (older ones keep going).
         ambgrid.touches.delete(msg.socketID);
         const list = ambgrid.ripples.get(msg.socketID) || [];
-        list.push({ x: msg.x, y: msg.y, startedAt: now });
+        list.push({ x: msg.x, y: msg.y, startedAt: performance.now() });
         ambgrid.ripples.set(msg.socketID, list.slice(-window.AmbSynthEmbed.MAX_RIPPLES));
         return;
     }
-    const touching = msg.phase !== 'up';
-    ambgrid.touches.set(msg.socketID, {
-        x: msg.x,
-        y: msg.y,
-        touching,
-        releasedAt: touching ? null : now
-    });
+    ambgrid.touches.set(msg.socketID, { x: msg.x, y: msg.y });
 }
 
 function initSocket() {

@@ -322,7 +322,14 @@ function initializeSocket() {
     // Get session name from URL
     const urlParams = new URLSearchParams(window.location.search);
     app.sessionName = urlParams.get('session') || 'default';
-    
+
+    // Point the public/ambgrid page links at this session
+    const sessionQuery = `?session=${encodeURIComponent(app.sessionName)}`;
+    const publicLink = document.getElementById('public-link');
+    const ambgridLink = document.getElementById('ambgrid-link');
+    if (publicLink) publicLink.href = `/public${sessionQuery}`;
+    if (ambgridLink) ambgridLink.href = `/ambgrid${sessionQuery}`;
+
     // Initialize socket connection
     app.socket = io('', {
         query: {

@@ -124,6 +124,35 @@ describe('chaotic-pedalboard server', () => {
         expect(assignment.deviceState.controllers['cc:74']).toBe(99);
     });
 
+    test('participant MIDI emits throttled device-activity to displays; none during takeover', async () => {
+        const host = await setupHostWithDevices('s16', [DEVICES[0]]);
+        const display = connect({ role: 'public', session: 's16' });
+        await waitFor(display, 'public-session-snapshot');
+
+        const track = connect({ role: 'participant', session: 's16', initials: 'JP' });
+        await waitFor(track, 'track-assignment');
+
+        const events = [];
+        display.on('device-activity', msg => events.push(msg));
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        // A burst (slider drag) within the throttle window -> one event.
+        const firstPromise = waitFor(display, 'device-activity');
+        [10, 20, 30].forEach(v => track.emit('routed-message', { type: 'MIDI', message: [0xB0, 74, v] }));
+        expect(await firstPromise).toEqual({ deviceId: 1 });
+        await sleep(50);
+        expect(events).toHaveLength(1);
+
+        // Takeover blocks participant MIDI, so no glow either.
+        const takeoverPromise = waitForMatch(host, 'takeover-state-updated', m => m.takeover.enabled);
+        host.emit('set-takeover-state', { enabled: true, value: 100 });
+        await takeoverPromise;
+        await sleep(120); // past the throttle window
+        track.emit('routed-message', { type: 'MIDI', message: [0xB0, 74, 40] });
+        await sleep(80);
+        expect(events).toHaveLength(1);
+    });
+
     test('takeover suspends participants and blocks MIDI; disabling promotes them back', async () => {
         const host = await setupHostWithDevices('s4', [DEVICES[0]]);
 
@@ -361,7 +390,7 @@ describe('chaotic-pedalboard server', () => {
         const touch = await touchPromise;
         expect(touch).toEqual({ socketID: track.id, phase: 'move', x: 1, y: 0.25 }); // x clamped
 
-        // 'up' carries the short-tap flag (drives the ripple on /ambgrid).
+        // 'up' carries the short-tap flag (drives the ripple on /grid).
         const upPromise = waitFor(display, 'ambsynth-touch');
         track.emit('ambsynth-touch', { phase: 'up', x: 0.5, y: 0.5, short: true });
         expect(await upPromise).toEqual({ socketID: track.id, phase: 'up', x: 0.5, y: 0.5, short: true });

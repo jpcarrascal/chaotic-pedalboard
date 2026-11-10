@@ -4,7 +4,7 @@ const path = require('path');
 // Chaotic Pedalboard's app-specific server logic as a beatlink-core plugin:
 // device catalog + slot-to-device assignments, per-device CC runtime state,
 // host takeover, QR base URL, the public-display snapshot, and participant
-// colors + ambsynth touch mirroring for the /ambgrid display. Everything
+// colors + ambsynth touch mirroring for the /grid display. Everything
 // generic (sessions, roles, queue, slot timers, veil, MIDI transport) lives
 // in beatlink-core.
 
@@ -128,7 +128,7 @@ function normalizeQrBaseUrl(rawValue) {
 
 // --- participant colors + ambsynth players ----------------------------------
 
-// Background colors for participants' ambsynth; mirrored on the /ambgrid view.
+// Background colors for participants' ambsynth; mirrored on the /grid view.
 const PARTICIPANT_COLORS = [
     '#e4572e', // coral
     '#f2a541', // amber
@@ -246,6 +246,19 @@ function emitAmbsynthPlayers(ctx, session, socketID) {
     }
 }
 
+// Tells displays a pedal just received a participant message (drives the
+// glow on /grid). Throttled per device: a slider drag sends dozens of
+// messages per second, displays only need ~10 events/s to stay lit.
+const DEVICE_ACTIVITY_MIN_INTERVAL_MS = 100;
+
+function emitDeviceActivity(ctx, session, deviceId) {
+    const lastAt = session.getAttribute('deviceActivityAt');
+    const now = Date.now();
+    if (now - (lastAt[deviceId] || 0) < DEVICE_ACTIVITY_MIN_INTERVAL_MS) return;
+    lastAt[deviceId] = now;
+    ctx.emitToRole(session.name, 'public', 'device-activity', { deviceId });
+}
+
 function emitPublicSnapshot(ctx, session, socketID) {
     ctx.io.to(socketID).emit('public-session-snapshot', {
         configuredDevices: getConfiguredDevices(session),
@@ -293,7 +306,8 @@ module.exports = function midiPlugin(ctx) {
         takeover: { enabled: false, value: 127 },
         qrBaseUrl: null,
         participantColors: {},   // socketID -> PARTICIPANT_COLORS index
-        ambsynthPlayers: {}      // socketID -> { initials, color } while on ambsynth
+        ambsynthPlayers: {},     // socketID -> { initials, color } while on ambsynth
+        deviceActivityAt: {}     // deviceId -> last 'device-activity' emit (ms), for throttling
     });
 
     // Participants only get a slot when a pedal is free and no takeover is on.
@@ -322,17 +336,20 @@ module.exports = function midiPlugin(ctx) {
     // assigned users inherit the latest values; drop everything during takeover.
     ctx.onRoutedMessage((socket, session, envelope) => {
         if (envelope.type !== 'MIDI') return;
-        if (isTakeoverEnabled(session)) return false;
+        if (isTakeoverEnabled(session)) return false; // blocked: no glow on /grid either
+
+        const slot = session.participants.slotOf(socket.id);
+        const assignment = slot >= 0 ? getAssignments(session)[slot] : null;
+        const deviceId = (assignment && assignment.deviceId !== undefined && assignment.deviceId !== null)
+            ? assignment.deviceId
+            : null;
 
         const message = envelope.message;
-        if (Array.isArray(message) && message.length >= 3 && (message[0] >> 4) === 0xB) {
-            const slot = session.participants.slotOf(socket.id);
-            const assignment = slot >= 0 ? getAssignments(session)[slot] : null;
-            if (assignment && assignment.deviceId !== undefined && assignment.deviceId !== null) {
-                setDeviceControllerValue(session, assignment.deviceId, message[1], message[2]);
-                emitRuntimeDiagnostics(ctx, session);
-            }
+        if (deviceId !== null && Array.isArray(message) && message.length >= 3 && (message[0] >> 4) === 0xB) {
+            setDeviceControllerValue(session, deviceId, message[1], message[2]);
+            emitRuntimeDiagnostics(ctx, session);
         }
+        if (deviceId !== null) emitDeviceActivity(ctx, session, deviceId);
     });
 
     // Give host and public their current state on (re)connect.
@@ -364,7 +381,7 @@ module.exports = function midiPlugin(ctx) {
         if (session) emitPublicSnapshot(ctx, session, socket.id);
     });
 
-    // --- ambsynth mirroring (participants without a pedal -> /ambgrid) ---
+    // --- ambsynth mirroring (participants without a pedal -> /grid) ---
 
     ctx.on('request-ambsynth-players', (socket, session) => {
         if (session) emitAmbsynthPlayers(ctx, session, socket.id);

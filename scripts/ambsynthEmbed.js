@@ -40,7 +40,7 @@
   };
 
   // Reference phone width used to scale the overlay on smaller/larger canvases
-  // (e.g. the /ambgrid cells), so circle and lines keep their proportions.
+  // (e.g. the /grid cells), so circle and lines keep their proportions.
   const OVERLAY_REFERENCE_WIDTH = 390;
   const OVERLAY_CIRCLE_RADIUS = 18;
   const OVERLAY_LINE_WIDTH = 3.5;

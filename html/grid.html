@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Chaotic Pedalboard - Ambsynth Grid</title>
+    <title>Chaotic Pedalboard - Grid</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
     <meta charset="utf-8">
     <style>
@@ -15,13 +15,13 @@
         background: #0f1115;
       }
 
-      #ambgrid {
+      #grid {
         display: block;
         width: 100vw;
         height: 100vh;
       }
 
-      #ambgrid-status {
+      #grid-status {
         position: fixed;
         inset: 0;
         display: flex;
@@ -34,17 +34,17 @@
         padding: 0 16px;
       }
 
-      #ambgrid-status.hidden {
+      #grid-status.hidden {
         display: none;
       }
     </style>
   </head>
   <body>
-    <canvas id="ambgrid"></canvas>
-    <div id="ambgrid-status">Connecting...</div>
+    <canvas id="grid"></canvas>
+    <div id="grid-status">Connecting...</div>
 
     <script src="https://cdn.socket.io/4.4.0/socket.io.min.js"></script>
     <script src="scripts/ambsynthEmbed.js"></script>
-    <script src="scripts/ambgrid.js"></script>
+    <script src="scripts/grid.js"></script>
   </body>
 </html>

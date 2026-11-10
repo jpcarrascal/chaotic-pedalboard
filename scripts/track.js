@@ -275,7 +275,7 @@ if(!initials && session) { // No initials == no socket connection
 
     /* ----------- Socket messages ------------ */
 
-    // Per-participant ambsynth background (mirrored on /ambgrid).
+    // Per-participant ambsynth background (mirrored on /grid).
     socket.on('participant-color', function(msg) {
         if (!msg || !msg.color) return;
         participantColor = msg.color;

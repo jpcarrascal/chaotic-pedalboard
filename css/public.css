@@ -254,7 +254,7 @@ body {
   gap: clamp(6px, 0.6vw, 10px);
 }
 
-/* Participant color as a 9:16 portrait swatch, matching /ambgrid cells. */
+/* Participant color as a 9:16 portrait swatch, matching /grid cells. */
 .user-color-swatch {
   width: clamp(14px, 1.4vw, 20px);
   aspect-ratio: 9 / 16;

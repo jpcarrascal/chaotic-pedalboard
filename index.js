@@ -40,8 +40,8 @@ app.get('/public', (req, res) => {
     res.sendFile(path.join(__dirname, 'html/public.html'));
 });
 
-app.get('/ambgrid', (req, res) => {
-    res.sendFile(path.join(__dirname, 'html/ambgrid.html'));
+app.get('/grid', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html/grid.html'));
 });
 
 app.get('/ambsynth', (req, res) => {

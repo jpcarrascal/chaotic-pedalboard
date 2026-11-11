@@ -2,7 +2,7 @@
 <html>
   <head>
     <title>Chaotic Pedalboard - Track Controller</title>
-    <link rel="stylesheet" href="css/track.css?v=21">
+    <link rel="stylesheet" href="css/track.css?v=23">
     <link rel="stylesheet" href="css/color-transitions.css">
     <link href='https://fonts.googleapis.com/css?family=Montserrat' rel='stylesheet'>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -24,10 +24,11 @@
     </div>
 
     <div id="initials-form" class="full-screen">
-      Enter your initials (3 characters max):
       <form>
-        <input type="text" id="initials" name="initials" maxlength="3" autocapitalize="characters" autocomplete="off" placeholder="">
-        <input type="submit" value="Submit">
+        <h1 class="initials-title">Enter your initials</h1>
+        <p class="initials-hint">Up to 3 characters</p>
+        <input type="text" id="initials" name="initials" maxlength="3" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="">
+        <input type="submit" value="Join">
       </form>
     </div>
 

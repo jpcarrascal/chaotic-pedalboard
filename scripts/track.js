@@ -153,8 +153,9 @@ setDeviceInfoVisible(true);
 setCountdownVisible(false);
 
 if(!initials && session) { // No initials == no socket connection
-    document.getElementById("initials-form").style.display = "block";
+    document.getElementById("initials-form").style.display = "flex";
     document.getElementById("veil").style.display = "none";
+    document.getElementById("initials").focus(); // opens the keyboard where the browser allows it
     document.getElementById("initials").addEventListener("input", function(e) {
         this.value = normalizeInitials(this.value) || '';
     });

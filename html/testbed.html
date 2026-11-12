@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaotic Pedalboard - Testbed</title>
+    <style>
+        body { margin: 0; background: #111; color: #eee; font-family: Arial, sans-serif; }
+        #toolbar {
+            position: sticky; top: 0; z-index: 10;
+            display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+            padding: 8px 12px; background: #222; border-bottom: 1px solid #333;
+        }
+        #toolbar button, #toolbar input { font-size: 14px; padding: 4px 10px; }
+        #toolbar input { width: 140px; }
+        #count { margin-left: auto; opacity: 0.7; }
+        #frames { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
+        .frame { position: relative; background: #000; border: 1px solid #333; zoom: var(--zoom, 0.5); }
+        .frame iframe { display: block; width: 390px; height: 844px; border: 0; }
+        .frame .label {
+            position: absolute; top: 0; left: 0; right: 0; height: 36px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 8px; background: rgba(0,0,0,0.6); font-size: 24px; pointer-events: none;
+        }
+        .frame .label button { pointer-events: auto; font-size: 22px; background: #a33; color: #fff; border: 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <label>Session <input id="session" type="text"></label>
+        <button id="add">+ Add</button>
+        <button id="add5">+ Add 5</button>
+        <button id="remove">− Remove last</button>
+        <button id="reload">Reload all</button>
+        <button id="size">Size: small</button>
+        <span id="count"></span>
+    </div>
+    <div id="frames"></div>
+
+    <script>
+        // Testbed: N /track participants as iframes in one visible tab
+        // (no background-tab throttling). Usage: /testbed?session=X&n=10
+        const params = new URLSearchParams(location.search);
+        const framesEl = document.getElementById('frames');
+        const sessionInput = document.getElementById('session');
+        const countEl = document.getElementById('count');
+        const sizeBtn = document.getElementById('size');
+        const ZOOMS = [['small', 0.5], ['medium', 0.75], ['phone', 1]];
+        let zoomIdx = 0;
+        let nextId = 1;
+
+        sessionInput.value = params.get('session') || '';
+
+        function updateCount() {
+            countEl.textContent = framesEl.children.length + ' participant(s)';
+        }
+
+        function addFrame() {
+            const session = sessionInput.value.trim();
+            if (!session) { sessionInput.focus(); return; }
+            const initials = 'T' + String(nextId++).padStart(2, '0');
+            const wrap = document.createElement('div');
+            wrap.className = 'frame';
+            wrap.style.setProperty('--zoom', ZOOMS[zoomIdx][1]);
+            const iframe = document.createElement('iframe');
+            iframe.src = '/track?session=' + encodeURIComponent(session) + '&initials=' + initials;
+            const label = document.createElement('div');
+            label.className = 'label';
+            label.innerHTML = '<span>' + initials + '</span>';
+            const close = document.createElement('button');
+            close.textContent = '×';
+            close.title = 'Remove (disconnects this participant)';
+            close.onclick = () => { wrap.remove(); updateCount(); };
+            label.appendChild(close);
+            wrap.appendChild(iframe);
+            wrap.appendChild(label);
+            framesEl.appendChild(wrap);
+            updateCount();
+        }
+
+        document.getElementById('add').onclick = addFrame;
+        document.getElementById('add5').onclick = () => { for (let i = 0; i < 5; i++) addFrame(); };
+        document.getElementById('remove').onclick = () => {
+            if (framesEl.lastElementChild) framesEl.lastElementChild.remove();
+            updateCount();
+        };
+        document.getElementById('reload').onclick = () => {
+            for (const iframe of framesEl.querySelectorAll('iframe')) iframe.src = iframe.src;
+        };
+        sizeBtn.onclick = () => {
+            zoomIdx = (zoomIdx + 1) % ZOOMS.length;
+            sizeBtn.textContent = 'Size: ' + ZOOMS[zoomIdx][0];
+            for (const f of framesEl.children) f.style.setProperty('--zoom', ZOOMS[zoomIdx][1]);
+        };
+
+        const n = parseInt(params.get('n'), 10) || 0;
+        if (sessionInput.value) for (let i = 0; i < n; i++) addFrame();
+        updateCount();
+    </script>
+</body>
+</html>

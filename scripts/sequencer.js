@@ -330,6 +330,8 @@ function initializeSocket() {
     const gridLink = document.getElementById('grid-link');
     if (publicLink) publicLink.href = `/public${sessionQuery}`;
     if (gridLink) gridLink.href = `/grid${sessionQuery}`;
+    const testbedLink = document.getElementById('testbed-link');
+    if (testbedLink) testbedLink.href = `/testbed${sessionQuery}&n=8`;
 
     // Initialize socket connection
     app.socket = io('', {

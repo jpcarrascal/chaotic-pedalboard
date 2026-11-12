@@ -48,6 +48,10 @@ app.get('/ambsynth', (req, res) => {
     res.sendFile(path.join(__dirname, 'html/ambsynth.html'));
 });
 
+app.get('/testbed', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html/testbed.html'));
+});
+
 app.get('/latency', (req, res) => {
     res.sendFile(path.join(__dirname, 'html/latency.html'));
 });

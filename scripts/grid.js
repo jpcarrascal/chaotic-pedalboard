@@ -18,8 +18,8 @@ const GRID = {
     tallImageWidthRatio: 0.6, // same, for photos taller than wide
     idleColor: '#2a2d33',    // unassigned pedal cell
     idleImageAlpha: 0.35,
-    glowLighten: 0.25,       // pedal cell lightens this much toward white on activity...
-    glowFadeMs: 400          // ...and fades back over this long after the last message
+    glowLighten: 0.30,       // pedal cell lightens this much toward white on activity...
+    glowFadeMs: 300          // ...and fades back over this long after the last message
 };
 
 const grid = {

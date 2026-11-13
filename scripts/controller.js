@@ -1,5 +1,5 @@
 /**
- * MIDI Routing Sequencer
+ * MIDI Routing Controller
  * Main application logic for the routing matrix interface
  */
 
@@ -163,7 +163,7 @@ function resetQrBaseUrlToDefault() {
 
 // Initialize application when page loads
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log('Initializing MIDI Routing Sequencer...');
+    console.log('Initializing MIDI Routing Controller...');
     
     // Get DOM elements
     initializeElements();
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateSessionInfo();
     updateTrackUrl();
     
-    console.log('MIDI Routing Sequencer initialized successfully');
+    console.log('MIDI Routing Controller initialized successfully');
 });
 
 /**
@@ -360,7 +360,7 @@ function initializeSocket() {
     app.socket.on('takeover-state-updated', onTakeoverStateUpdated);
     app.socket.on('takeover-error', onTakeoverError);
     app.socket.on('turn-duration-updated', onSlotDurationUpdated);
-    app.socket.on('host-exists', onSequencerExists);
+    app.socket.on('host-exists', onControllerExists);
     app.socket.on('error', onSocketError);
 }
 
@@ -689,8 +689,8 @@ function onGetTrackAssignment(data) {
     }
 }
 
-function onSequencerExists(data) {
-    showError('Session already has a sequencer: ' + data.reason);
+function onControllerExists(data) {
+    showError('Session already has a controller: ' + data.reason);
     setTimeout(() => {
         window.location.href = '/';
     }, 3000);
@@ -988,7 +988,7 @@ function updateTakeoverControls() {
 
     if (hint) {
         if (!isConnected) {
-            hint.textContent = 'Connect sequencer to use Takeover.';
+            hint.textContent = 'Connect controller to use Takeover.';
         } else if (app.sessionMode === 'takeover') {
             hint.textContent = 'Takeover active. All users are queued until mode changes.';
         } else {

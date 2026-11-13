@@ -1,12 +1,12 @@
 /* Routing Matrix CSS */
-/* Modern, clean styling for the MIDI routing sequencer interface */
+/* Modern, clean styling for the MIDI routing controller interface */
 
 /* Utility Classes */
 .hidden {
     display: none !important;
 }
 
-/* Layout & Structure - Override old sequencer.css */
+/* Layout & Structure - Override old controller.css (formerly sequencer.css) */
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     margin: 0 !important;

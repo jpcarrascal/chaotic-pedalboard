@@ -6,7 +6,7 @@
 //  - Ambsynth (right): one cell per participant currently playing the waiting
 //    ambsynth (no pedal), colored with their background; touches are mirrored
 //    with the same circle + crosshair while touching and the 2s ripple on lift.
-//  - Camera: when enabled from the sequencer (or 'c'), the bottom band of the
+//  - Camera: when enabled from the controller (or 'c'), the bottom band of the
 //    devices half shows this machine's default webcam as a 16:9 cell; pedals
 //    re-flow into the space above it.
 
@@ -41,10 +41,10 @@ const grid = {
     ripples: new Map(),          // socketID -> [{ x, y, startedAt }] after lift (overlap)
     areas: null,                 // { devices, pedals, camera, ambsynth, labelH }
     layouts: { devices: null, ambsynth: null },
-    qrBaseUrl: null,             // from the sequencer's QR Base URL setting
-    qrVisible: false,            // join QR overlay (server-held, shared with the sequencer)
+    qrBaseUrl: null,             // from the controller's QR Base URL setting
+    qrVisible: false,            // join QR overlay (server-held, shared with the controller)
     qrRenderedFor: null,         // join URL the current QR image encodes
-    camera: { visible: false, flipped: false }, // server-held, set from the sequencer
+    camera: { visible: false, flipped: false }, // server-held, set from the controller
     cameraStream: null,          // MediaStream while the webcam is on
     cameraStarting: false,
     cameraError: null,           // message shown in the camera cell when it can't start

@@ -786,10 +786,10 @@ class DeviceConfiguration {
      * Notify tracks that are using a specific device about configuration changes
      */
     notifyTracksOfDeviceChange(deviceId) {
-        // Check if sequencer routing system is available
+        // Check if controller routing system is available
         if (!window.app || !window.app.routingMatrix) {
             console.log('Routing matrix not available for device change notification, will retry...');
-            // Retry after a short delay in case the sequencer is still initializing
+            // Retry after a short delay in case the controller is still initializing
             setTimeout(() => {
                 this.notifyTracksOfDeviceChange(deviceId);
             }, 100);

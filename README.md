@@ -8,7 +8,7 @@ synthesizers — no app install required, just a browser.
 
 ## How a session works
 
-- **Host** — the performer/operator's machine. It runs the sequencer/routing page, has
+- **Host** — the performer/operator's machine. It runs the controller/routing page, has
   the local MIDI interfaces connected to the actual pedals, and owns the session.
 - **Participants** — audience members who join on their phones. Each is assigned an
   available pedal (or a synth voice) and gets a control surface built specifically for
@@ -28,7 +28,7 @@ npm install
 node index.js
 ```
 
-- Host: `http://localhost:3000/sequencer?session=yoursession`
+- Host: `http://localhost:3000/controller?session=yoursession`
 - Participants: `http://localhost:3000/track?session=yoursession`
 - Public display: `http://localhost:3000/public?session=yoursession`
 
@@ -36,7 +36,7 @@ node index.js
 
 Before a session, the host defines the pedals (or synths) available to route to:
 
-1. Open **Device Configuration** on the sequencer page.
+1. Open **Device Configuration** on the controller page.
 2. Give the device a name and a color (the color themes that device's Track interface).
 3. Add controllers:
    - **Continuous** — a slider over a CC range, e.g. `Filter Cutoff`, CC 74, range 0–127.

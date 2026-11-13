@@ -158,7 +158,7 @@ describe('chaotic-pedalboard server', () => {
         const display = connect({ role: 'public', session: 's17' });
         expect(await waitFor(display, 'qr-overlay-updated')).toEqual({ visible: false });
 
-        // Sequencer shows it -> display and host both get the new state.
+        // Controller shows it -> display and host both get the new state.
         const displayOn = waitForMatch(display, 'qr-overlay-updated', m => m.visible === true);
         const hostOn = waitForMatch(host, 'qr-overlay-updated', m => m.visible === true);
         host.emit('set-qr-overlay', { visible: true });
@@ -175,7 +175,7 @@ describe('chaotic-pedalboard server', () => {
         await new Promise(resolve => setTimeout(resolve, 50));
         expect(server.sessions.get('s17').getAttribute('qrOverlayVisible')).toBe(true);
 
-        // A display (grid q / click / Esc) hides it -> the sequencer follows.
+        // A display (grid q / click / Esc) hides it -> the controller follows.
         const hostOff = waitForMatch(host, 'qr-overlay-updated', m => m.visible === false);
         display.emit('set-qr-overlay', { visible: false });
         await hostOff;
@@ -187,7 +187,7 @@ describe('chaotic-pedalboard server', () => {
         const display = connect({ role: 'public', session: 's18' });
         expect(await waitFor(display, 'camera-updated')).toEqual({ visible: false, flipped: false });
 
-        // Sequencer shows it, then flips it; each field can be set on its own.
+        // Controller shows it, then flips it; each field can be set on its own.
         const displayOn = waitForMatch(display, 'camera-updated', m => m.visible === true);
         const hostOn = waitForMatch(host, 'camera-updated', m => m.visible === true);
         host.emit('set-camera', { visible: true });
@@ -207,7 +207,7 @@ describe('chaotic-pedalboard server', () => {
         await new Promise(resolve => setTimeout(resolve, 50));
         expect(server.sessions.get('s18').getAttribute('camera')).toEqual({ visible: true, flipped: true });
 
-        // A display (grid 'c') hides it -> the sequencer follows; flip is kept.
+        // A display (grid 'c') hides it -> the controller follows; flip is kept.
         const hostOff = waitForMatch(host, 'camera-updated', m => m.visible === false);
         display.emit('set-camera', { visible: false });
         expect(await hostOff).toEqual({ visible: false, flipped: true });

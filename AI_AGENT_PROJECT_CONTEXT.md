@@ -14,7 +14,7 @@
 Chaotic Pedalboard (formerly MIDI Socket) is a real-time collaborative music web app that currently operates as a MIDI routing bridge between:
 
 - Remote browser-based Track clients (participants)
-- A host Sequencer client running on a machine with local MIDI interfaces
+- A host Controller client running on a machine with local MIDI interfaces
 
 The host receives participant control/note data over Socket.IO, maps each participant to a selected MIDI output device/channel, and forwards MIDI messages to connected hardware/software MIDI targets.
 
@@ -25,7 +25,7 @@ The codebase evolved from an earlier collaborative step-sequencer model and incl
 ### 2.1 Runtime Topology
 
 - `index.js` is the Node.js + Express + Socket.IO server entrypoint.
-- Sequencer web UI (host/operator) is served from `html/sequencer.html` with logic in `scripts/sequencer.js`.
+- Controller web UI (host/operator; formerly "Sequencer") is served from `html/controller.html` with logic in `scripts/controller.js`.
 - Track web UI (remote participant) is served from `html/track.html` with logic in `scripts/track.js`.
 - Shared/session and MIDI routing utilities are under `scripts/`.
 
@@ -33,7 +33,7 @@ Data flow:
 
 1. Track emits interaction/MIDI events over Socket.IO.
 2. Server associates socket with a session and participant slot.
-3. Sequencer host UI manages routing assignments (device + channel per track).
+3. Controller host UI manages routing assignments (device + channel per track).
 4. Routing logic forwards MIDI messages to the selected local output interface/channel.
 
 ### 2.2 Key Modules
@@ -44,13 +44,13 @@ Data flow:
 - `scripts/routingMatrix.js`: Track-to-device/channel mapping state and validation.
 - `scripts/midiRouting.js`: MIDI message routing engine.
 - `scripts/deviceConfiguration.js`: Custom device/controller configuration workflow with persistence/import/export.
-- `scripts/sequencer.js`: Sequencer page orchestration and routing matrix UI behavior.
+- `scripts/controller.js`: Controller page orchestration and routing matrix UI behavior.
 - `scripts/track.js`: Track page controls and outbound message behavior.
 
 ### 2.3 Frontend Structure
 
-- HTML pages in `html/` for different app surfaces (`sequencer`, `track`, `public`, `ambsynth`, etc.).
-- CSS in `css/` with focused stylesheets (`routingMatrix.css`, `track.css`, `sequencer.css`, etc.).
+- HTML pages in `html/` for different app surfaces (`controller`, `track`, `public`, `ambsynth`, etc.).
+- CSS in `css/` with focused stylesheets (`routingMatrix.css`, `track.css`, `controller.css`, etc.).
 - Browser-side scripts in `scripts/`.
 
 ## 3) Current Feature Set
@@ -125,7 +125,7 @@ Coverage focus today is session management behavior and direct-access session AP
 ### 6.2 Manual Validation Checklist
 
 1. Start server (`node index.js`).
-2. Open Sequencer page with a session query.
+2. Open Controller page with a session query.
 3. Open one or more Track pages in same session.
 4. Confirm track allocation and routing matrix updates.
 5. Assign device/channel and send Track interactions.
@@ -153,16 +153,16 @@ Coverage focus today is session management behavior and direct-access session AP
 When making changes in this repo:
 
 1. Preserve session API usage based on `sessionObj.js` direct-access pattern.
-2. Treat Sequencer as the routing authority and Track as event source.
+2. Treat Controller as the routing authority and Track as event source.
 3. Validate both Socket.IO behavior and MIDI routing behavior after changes.
 4. Prefer minimal, surgical edits to avoid regressions in real-time pathways.
-5. Run tests (`npm test`) and perform at least one manual Sequencer+Track smoke test for user-facing changes.
+5. Run tests (`npm test`) and perform at least one manual Controller+Track smoke test for user-facing changes.
 
 ## 9) Quick Reference
 
 - Server entrypoint: `index.js`
 - Session logic: `scripts/sessionObj.js`
-- Sequencer UI: `html/sequencer.html`, `scripts/sequencer.js`, `css/routingMatrix.css`
+- Controller UI: `html/controller.html`, `scripts/controller.js`, `css/routingMatrix.css`
 - Track UI: `html/track.html`, `scripts/track.js`, `css/track.css`
 - MIDI/routing core: `scripts/midiDeviceManager.js`, `scripts/routingMatrix.js`, `scripts/midiRouting.js`
 - Device config system: `scripts/deviceConfiguration.js`

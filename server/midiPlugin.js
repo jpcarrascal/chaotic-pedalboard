@@ -272,7 +272,7 @@ function emitPublicSnapshot(ctx, session, socketID) {
     });
 }
 
-// Keeps the server-side device map aligned with the sequencer's
+// Keeps the server-side device map aligned with the controller's
 // authoritative routing when the host reassigns a track.
 function syncDeviceAssignmentFromHostMessage(session, msg) {
     if (!session || !msg) return;
@@ -308,8 +308,8 @@ module.exports = function midiPlugin(ctx) {
         participantColors: {},   // socketID -> PARTICIPANT_COLORS index
         ambsynthPlayers: {},     // socketID -> { initials, color } while on ambsynth
         deviceActivityAt: {},    // deviceId -> last 'device-activity' emit (ms), for throttling
-        qrOverlayVisible: false, // join QR overlay on /grid, toggled from sequencer or grid
-        camera: { visible: false, flipped: false }, // /grid webcam band, toggled from sequencer or grid
+        qrOverlayVisible: false, // join QR overlay on /grid, toggled from controller or grid
+        camera: { visible: false, flipped: false }, // /grid webcam band, toggled from controller or grid
         publicDisplays: {}       // socketID -> true for connected public displays
     });
 
@@ -548,9 +548,9 @@ module.exports = function midiPlugin(ctx) {
         ctx.emitToSession(session.name, 'qr-base-url-updated', { baseUrl: normalized });
     });
 
-    // Join QR overlay on /grid: host (sequencer button / 'q') or a public
+    // Join QR overlay on /grid: host (controller button / 'q') or a public
     // display (grid 'q', click, Esc) sets it; everyone gets the new state so
-    // the sequencer button and all grids stay in sync.
+    // the controller button and all grids stay in sync.
     ctx.on('set-qr-overlay', (socket, session, msg) => {
         if (!session) return;
         const isDisplay = Boolean(session.getAttribute('publicDisplays')[socket.id]);
@@ -561,7 +561,7 @@ module.exports = function midiPlugin(ctx) {
         ctx.emitToRole(session.name, 'public', 'qr-overlay-updated', { visible });
     });
 
-    // Webcam band on /grid (the grid machine's own camera): host (sequencer
+    // Webcam band on /grid (the grid machine's own camera): host (controller
     // buttons / 'c') or a public display (grid 'c') sets visible and/or
     // flipped; everyone gets the new state, like the QR overlay.
     ctx.on('set-camera', (socket, session, msg) => {
@@ -576,7 +576,7 @@ module.exports = function midiPlugin(ctx) {
         ctx.emitToRole(session.name, 'public', 'camera-updated', camera);
     });
 
-    // Play/Pause leave takeover mode (the sequencer relies on this) and keep
+    // Play/Pause leave takeover mode (the controller relies on this) and keep
     // its mode indicator in sync with core play/pause.
     function exitTakeover(session) {
         if (!isTakeoverEnabled(session)) return false;

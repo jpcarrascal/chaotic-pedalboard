@@ -24,12 +24,17 @@ const server = createServer({
 const { app } = server;
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'html/index-sequencer.html'));
+    res.sendFile(path.join(__dirname, 'html/index-controller.html'));
 });
 
-app.get('/sequencer', (req, res) => {
-    const page = req.query.session ? 'html/sequencer.html' : 'html/index-sequencer.html';
+app.get('/controller', (req, res) => {
+    const page = req.query.session ? 'html/controller.html' : 'html/index-controller.html';
     res.sendFile(path.join(__dirname, page));
+});
+
+// Old name: keep bookmarks and shared links working (query string kept).
+app.get('/sequencer', (req, res) => {
+    res.redirect(req.originalUrl.replace(/^\/sequencer/, '/controller'));
 });
 
 app.get('/track', (req, res) => {

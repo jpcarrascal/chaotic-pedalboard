@@ -309,6 +309,7 @@ module.exports = function midiPlugin(ctx) {
         ambsynthPlayers: {},     // socketID -> { initials, color } while on ambsynth
         deviceActivityAt: {},    // deviceId -> last 'device-activity' emit (ms), for throttling
         qrOverlayVisible: false, // join QR overlay on /grid, toggled from sequencer or grid
+        camera: { visible: false, flipped: false }, // /grid webcam band, toggled from sequencer or grid
         publicDisplays: {}       // socketID -> true for connected public displays
     });
 
@@ -364,10 +365,12 @@ module.exports = function midiPlugin(ctx) {
             emitSessionMode(ctx, session);
             socket.emit('turn-duration-updated', { seconds: session.config.turnTaking.threshold });
             socket.emit('qr-overlay-updated', { visible: session.getAttribute('qrOverlayVisible') });
+            socket.emit('camera-updated', session.getAttribute('camera'));
         } else if (role === 'public') {
             session.getAttribute('publicDisplays')[socket.id] = true;
             emitPublicSnapshot(ctx, session, socket.id);
             socket.emit('qr-overlay-updated', { visible: session.getAttribute('qrOverlayVisible') });
+            socket.emit('camera-updated', session.getAttribute('camera'));
         } else if (role === 'participant') {
             socket.emit('participant-color', { color: assignParticipantColor(session, socket.id) });
         }
@@ -556,6 +559,21 @@ module.exports = function midiPlugin(ctx) {
         session.setAttribute('qrOverlayVisible', visible);
         ctx.emitToHost(session, 'qr-overlay-updated', { visible });
         ctx.emitToRole(session.name, 'public', 'qr-overlay-updated', { visible });
+    });
+
+    // Webcam band on /grid (the grid machine's own camera): host (sequencer
+    // buttons / 'c') or a public display (grid 'c') sets visible and/or
+    // flipped; everyone gets the new state, like the QR overlay.
+    ctx.on('set-camera', (socket, session, msg) => {
+        if (!session) return;
+        const isDisplay = Boolean(session.getAttribute('publicDisplays')[socket.id]);
+        if (!ctx.requireHost(socket, session) && !isDisplay) return;
+        const camera = { ...session.getAttribute('camera') };
+        if (msg && typeof msg.visible === 'boolean') camera.visible = msg.visible;
+        if (msg && typeof msg.flipped === 'boolean') camera.flipped = msg.flipped;
+        session.setAttribute('camera', camera);
+        ctx.emitToHost(session, 'camera-updated', camera);
+        ctx.emitToRole(session.name, 'public', 'camera-updated', camera);
     });
 
     // Play/Pause leave takeover mode (the sequencer relies on this) and keep

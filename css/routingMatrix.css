@@ -283,6 +283,12 @@ html {
     background: linear-gradient(135deg, #718096, #4a5568);
 }
 
+/* Toggle buttons that are on (QR, camera, flip, routing matrix) */
+.control-btn.active {
+    background: linear-gradient(135deg, #4a90e2, #2c6cb8);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 /* Panels */
 .panel {
     background: rgba(255, 255, 255, 0.95);
@@ -803,6 +809,17 @@ html {
     color: #1a202c;
 }
 
+/* Participant color next to the assigned user's initials */
+#device-config-table .user-color-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 18px; /* portrait, like the phone and grid cells */
+    margin-right: 8px;
+    vertical-align: middle;
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
 #device-config-table .user-cell em {
     color: #4a5568;
     font-style: normal;
@@ -868,6 +885,26 @@ html {
 
 #device-config-table .control-btn.small:last-child {
     margin-right: 0;
+}
+
+/* Reorder (▲▼) column */
+#device-config-table .order-col {
+    width: 1%;
+    white-space: nowrap;
+}
+
+#device-config-table .order-btn {
+    display: block;
+    width: 28px;
+    padding: 2px 0;
+    margin: 2px 0;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+#device-config-table .order-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
 }
 
 /* Device Selection Modal */

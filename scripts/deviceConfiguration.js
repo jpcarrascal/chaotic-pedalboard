@@ -639,6 +639,30 @@ class DeviceConfiguration {
     }
 
     /**
+     * Move a device one place up (-1) or down (+1). The array order is the
+     * device order everywhere: export JSON, autosave, grid and public.
+     */
+    moveDevice(deviceId, direction) {
+        const index = this.configuredDevices.findIndex(d => d.id === deviceId);
+        const target = index + direction;
+        if (index < 0 || target < 0 || target >= this.configuredDevices.length) return;
+
+        const devices = this.configuredDevices;
+        [devices[index], devices[target]] = [devices[target], devices[index]];
+
+        this.autoSaveConfiguration();
+        this.updateConfigurationTable();
+
+        if (window.updateRoutingMatrix) {
+            window.updateRoutingMatrix();
+        }
+
+        if (window.syncConfiguredDevicesToServer) {
+            window.syncConfiguredDevicesToServer();
+        }
+    }
+
+    /**
      * Update the configuration table
      */
     updateConfigurationTable() {
@@ -653,19 +677,27 @@ class DeviceConfiguration {
         this.elements.configTable?.classList.remove('hidden');
         this.elements.noDevicesMessage?.classList.add('hidden');
 
-        this.elements.configTableBody.innerHTML = this.configuredDevices.map(device => {
+        const lastIndex = this.configuredDevices.length - 1;
+        this.elements.configTableBody.innerHTML = this.configuredDevices.map((device, index) => {
             // Find which user(s) are assigned to this device
             const assignedUser = this.getAssignedUserForDevice(device.id);
-            const userDisplay = assignedUser ? `<strong>${assignedUser}</strong>` : '<em>---</em>';
+            const userColor = this.getAssignedUserColorForDevice(device.id);
+            const userSwatch = userColor ? `<span class="user-color-swatch" style="background-color: ${userColor};"></span>` : '';
+            const userDisplay = assignedUser ? `${userSwatch}<strong>${assignedUser}</strong>` : '<em>---</em>';
             
             return `
-            <tr data-device-id="${device.id}" style="background-color: ${device.color}15;">
-                <td class="device-name-cell">
-                    ${device.image ? `<img class="device-pedal-thumbnail" src="${device.image}" alt="${device.name} pedal image">` : ''}
-                    <div class="device-color-indicator" style="background-color: ${device.color};"></div>
-                    <div class="device-info">
-                        <strong>${device.name}</strong>
-                        <div class="device-details">${(device.controllers || []).length} controller${(device.controllers || []).length !== 1 ? 's' : ''}</div>
+            <tr data-device-id="${device.id}">
+                <td class="order-col">
+                    <button class="control-btn order-btn" onclick="deviceConfig.moveDevice(${device.id}, -1)" title="Move up" ${index === 0 ? 'disabled' : ''}>▲</button>
+                    <button class="control-btn order-btn" onclick="deviceConfig.moveDevice(${device.id}, 1)" title="Move down" ${index === lastIndex ? 'disabled' : ''}>▼</button>
+                </td>
+                <td>
+                    <div class="device-name-cell">
+                        ${device.image ? `<img class="device-pedal-thumbnail" src="${device.image}" alt="${device.name} pedal image">` : ''}
+                        <div class="device-info">
+                            <strong>${device.name}</strong>
+                            <div class="device-details">${(device.controllers || []).length} controller${(device.controllers || []).length !== 1 ? 's' : ''}</div>
+                        </div>
                     </div>
                 </td>
                 <td class="user-cell">
@@ -849,6 +881,19 @@ class DeviceConfiguration {
             }
         }
         return null; // No user assigned to this device
+    }
+
+    /**
+     * Participant color of the user assigned to a device (same as grid/phone)
+     */
+    getAssignedUserColorForDevice(deviceId) {
+        for (const trackNum in this.deviceAssignments) {
+            const assignment = this.deviceAssignments[trackNum];
+            if (assignment && assignment.deviceId === deviceId) {
+                return assignment.userColor || null;
+            }
+        }
+        return null;
     }
 
     /**

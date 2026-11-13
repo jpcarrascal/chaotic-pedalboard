@@ -19,6 +19,7 @@ let app = {
     deviceAssignments: {}, // Maps trackNumber -> {deviceId, deviceName, userInitials}
     deviceRuntimeStates: {},
     qrOverlayVisible: false,
+    camera: { visible: false, flipped: false },
     takeover: {
         value: 127
     },
@@ -215,6 +216,8 @@ function initializeElements() {
         takeoverButton: document.getElementById('takeover-button'),
         panicAllButton: document.getElementById('panic-all'),
         qrOverlayToggle: document.getElementById('qr-overlay-toggle'),
+        cameraToggle: document.getElementById('camera-toggle'),
+        cameraFlip: document.getElementById('camera-flip'),
         slotDurationInput: document.getElementById('slot-duration'),
         slotDurationApplyButton: document.getElementById('slot-duration-apply'),
         deviceConfigToggle: document.getElementById('device-config-toggle'),
@@ -353,6 +356,7 @@ function initializeSocket() {
     app.socket.on('queue-updated', onQueueUpdated);
     app.socket.on('session-mode-updated', onSessionModeUpdated);
     app.socket.on('qr-overlay-updated', onQrOverlayUpdated);
+    app.socket.on('camera-updated', onCameraUpdated);
     app.socket.on('takeover-state-updated', onTakeoverStateUpdated);
     app.socket.on('takeover-error', onTakeoverError);
     app.socket.on('turn-duration-updated', onSlotDurationUpdated);
@@ -418,6 +422,8 @@ function setupEventListeners() {
     app.elements.takeoverButton.addEventListener('click', () => setSessionMode('takeover'));
     app.elements.panicAllButton.addEventListener('click', onPanicAll);
     app.elements.qrOverlayToggle.addEventListener('click', toggleQrOverlay);
+    app.elements.cameraToggle.addEventListener('click', () => setCamera({ visible: !app.camera.visible }));
+    app.elements.cameraFlip.addEventListener('click', () => setCamera({ flipped: !app.camera.flipped }));
     app.elements.slotDurationApplyButton.addEventListener('click', onApplySlotDuration);
     app.elements.slotDurationInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -427,16 +433,29 @@ function setupEventListeners() {
     });
     
     // Panel toggles
+    // Device config stays open; this button shows/hides the routing matrix
+    // (hidden on load).
     app.elements.deviceConfigToggle.addEventListener('click', () => {
-        deviceConfig.toggleVisibility();
+        const matrix = document.getElementById('routing-matrix');
+        const visible = matrix.classList.toggle('hidden') === false;
+        app.elements.deviceConfigToggle.textContent = visible ? '🎵 Hide Routing Matrix' : '🎵 Show Routing Matrix';
+        app.elements.deviceConfigToggle.classList.toggle('active', visible);
     });
     
-    app.elements.infoToggle.addEventListener('click', () => {
-        app.elements.devicePanel.classList.toggle('hidden');
-    });
-    
-    app.elements.statsToggle.addEventListener('click', () => {
-        app.elements.statsPanel.classList.toggle('hidden');
+    // Info/Stats buttons stay highlighted while their panel is open; the
+    // panels' own ✕ buttons (inline onclick hides) clear the highlight too.
+    [
+        [app.elements.infoToggle, app.elements.devicePanel],
+        [app.elements.statsToggle, app.elements.statsPanel]
+    ].forEach(([button, panel]) => {
+        button.addEventListener('click', () => {
+            const visible = panel.classList.toggle('hidden') === false;
+            button.classList.toggle('active', visible);
+        });
+        const closeButton = panel.querySelector('.panel-close-btn');
+        if (closeButton) {
+            closeButton.addEventListener('click', () => button.classList.remove('active'));
+        }
     });
     
     // Copy URL button
@@ -464,13 +483,16 @@ function setupEventListeners() {
         app.elements.takeoverFader.addEventListener('input', onTakeoverFaderInput);
     }
     
-    // 'q' toggles the join QR overlay on the grid display (not while typing).
+    // 'q' toggles the join QR overlay, 'c' the webcam, on the grid display
+    // (not while typing).
     document.addEventListener('keydown', (e) => {
-        if (e.key !== 'q' && e.key !== 'Q') return;
+        const key = e.key.toLowerCase();
+        if (key !== 'q' && key !== 'c') return;
         if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
         const target = e.target;
         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
-        toggleQrOverlay();
+        if (key === 'q') toggleQrOverlay();
+        else setCamera({ visible: !app.camera.visible });
     });
 }
 
@@ -1047,6 +1069,23 @@ function onQrOverlayUpdated(msg) {
     app.qrOverlayVisible = Boolean(msg && msg.visible);
     app.elements.qrOverlayToggle.textContent = app.qrOverlayVisible ? '📱 Hide QR Code' : '📱 Show QR Code';
     app.elements.qrOverlayToggle.classList.toggle('active', app.qrOverlayVisible);
+}
+
+// Webcam on the grid display (the grid machine's own camera). Server-held
+// like the QR overlay; changes may be partial ({ visible } or { flipped }).
+function setCamera(change) {
+    if (!app.socket || !app.socket.connected) {
+        showError('Connect to the session before controlling the camera.');
+        return;
+    }
+    app.socket.emit('set-camera', change);
+}
+
+function onCameraUpdated(msg) {
+    app.camera = { visible: Boolean(msg && msg.visible), flipped: Boolean(msg && msg.flipped) };
+    app.elements.cameraToggle.textContent = app.camera.visible ? '📷 Hide Camera' : '📷 Show Camera';
+    app.elements.cameraToggle.classList.toggle('active', app.camera.visible);
+    app.elements.cameraFlip.classList.toggle('active', app.camera.flipped);
 }
 
 // ===== UI UPDATE FUNCTIONS =====

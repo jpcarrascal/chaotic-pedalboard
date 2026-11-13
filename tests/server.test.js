@@ -182,6 +182,37 @@ describe('chaotic-pedalboard server', () => {
         expect(server.sessions.get('s17').getAttribute('qrOverlayVisible')).toBe(false);
     });
 
+    test('grid camera state is shared by host and displays; participants cannot set it', async () => {
+        const host = await setupHostWithDevices('s18', [DEVICES[0]]);
+        const display = connect({ role: 'public', session: 's18' });
+        expect(await waitFor(display, 'camera-updated')).toEqual({ visible: false, flipped: false });
+
+        // Sequencer shows it, then flips it; each field can be set on its own.
+        const displayOn = waitForMatch(display, 'camera-updated', m => m.visible === true);
+        const hostOn = waitForMatch(host, 'camera-updated', m => m.visible === true);
+        host.emit('set-camera', { visible: true });
+        await Promise.all([displayOn, hostOn]);
+        const flipped = waitForMatch(display, 'camera-updated', m => m.flipped === true);
+        host.emit('set-camera', { flipped: true });
+        expect(await flipped).toEqual({ visible: true, flipped: true });
+
+        // A display opened later starts with the current state.
+        const late = connect({ role: 'public', session: 's18' });
+        expect(await waitFor(late, 'camera-updated')).toEqual({ visible: true, flipped: true });
+
+        // A participant can't change it.
+        const track = connect({ role: 'participant', session: 's18', initials: 'JP' });
+        await waitFor(track, 'track-assignment');
+        track.emit('set-camera', { visible: false });
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(server.sessions.get('s18').getAttribute('camera')).toEqual({ visible: true, flipped: true });
+
+        // A display (grid 'c') hides it -> the sequencer follows; flip is kept.
+        const hostOff = waitForMatch(host, 'camera-updated', m => m.visible === false);
+        display.emit('set-camera', { visible: false });
+        expect(await hostOff).toEqual({ visible: false, flipped: true });
+    });
+
     test('takeover suspends participants and blocks MIDI; disabling promotes them back', async () => {
         const host = await setupHostWithDevices('s4', [DEVICES[0]]);
 

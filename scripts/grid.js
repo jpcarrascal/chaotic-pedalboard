@@ -6,6 +6,9 @@
 //  - Ambsynth (right): one cell per participant currently playing the waiting
 //    ambsynth (no pedal), colored with their background; touches are mirrored
 //    with the same circle + crosshair while touching and the 2s ripple on lift.
+//  - Camera: when enabled from the sequencer (or 'c'), the bottom band of the
+//    devices half shows this machine's default webcam as a 16:9 cell; pedals
+//    re-flow into the space above it.
 
 const GRID = {
     cellAspect: 9 / 16,      // width / height
@@ -16,10 +19,14 @@ const GRID = {
     labelMinPx: 18,
     imageWidthRatio: 0.9,    // pedal photo width relative to the cell
     tallImageWidthRatio: 0.6, // same, for photos taller than wide
+    nameSizeRatio: 0.075,    // device name font size, fraction of the cell width
+    nameStripRatio: 1.8,     // name strip height (top, mirrored at the bottom), x font size
     idleColor: '#2a2d33',    // unassigned pedal cell
     idleImageAlpha: 0.35,
     glowLighten: 0.30,       // pedal cell lightens this much toward white on activity...
-    glowFadeMs: 300          // ...and fades back over this long after the last message
+    glowFadeMs: 300,         // ...and fades back over this long after the last message
+    cameraBandRatio: 0.4,    // share of the devices half's height given to the camera
+    cameraAspect: 16 / 9     // camera cell width / height (webcam native)
 };
 
 const grid = {
@@ -32,11 +39,16 @@ const grid = {
     players: [],                 // [{ socketID, initials, color, ink }]
     touches: new Map(),          // socketID -> { x, y } while touching (circle + crosshair)
     ripples: new Map(),          // socketID -> [{ x, y, startedAt }] after lift (overlap)
-    areas: null,                 // { devices, ambsynth, labelH }
+    areas: null,                 // { devices, pedals, camera, ambsynth, labelH }
     layouts: { devices: null, ambsynth: null },
     qrBaseUrl: null,             // from the sequencer's QR Base URL setting
     qrVisible: false,            // join QR overlay (server-held, shared with the sequencer)
     qrRenderedFor: null,         // join URL the current QR image encodes
+    camera: { visible: false, flipped: false }, // server-held, set from the sequencer
+    cameraStream: null,          // MediaStream while the webcam is on
+    cameraStarting: false,
+    cameraError: null,           // message shown in the camera cell when it can't start
+    cameraVideo: document.getElementById('camera-feed'),
     canvas: document.getElementById('grid'),
     statusEl: document.getElementById('grid-status')
 };
@@ -83,12 +95,35 @@ function updateLayout() {
     const height = window.innerHeight;
     const labelH = Math.max(GRID.labelMinPx, Math.round(height * GRID.labelRatio));
     const half = width / 2;
+    const devices = { x: 0, y: labelH, w: half, h: height - labelH };
+    let pedals = devices;
+    let camera = null;
+    if (grid.camera.visible) {
+        // Bottom band of the devices half; a centered 16:9 cell inside it.
+        const gap = Math.round(Math.min(width, height) * GRID.gapRatio);
+        const bandH = Math.round(devices.h * GRID.cameraBandRatio);
+        pedals = { x: devices.x, y: devices.y, w: devices.w, h: devices.h - bandH };
+        const maxW = devices.w - gap * 2;
+        const maxH = bandH - gap * 2;
+        const camW = Math.min(maxW, maxH * GRID.cameraAspect);
+        const camH = camW / GRID.cameraAspect;
+        if (camW > 0) {
+            camera = {
+                x: devices.x + (devices.w - camW) / 2,
+                y: pedals.y + pedals.h + (bandH - camH) / 2,
+                w: camW,
+                h: camH
+            };
+        }
+    }
     grid.areas = {
         labelH,
-        devices: { x: 0, y: labelH, w: half, h: height - labelH },
+        devices,
+        pedals,
+        camera,
         ambsynth: { x: half, y: labelH, w: width - half, h: height - labelH }
     };
-    grid.layouts.devices = computeLayout(grid.devices.length, grid.areas.devices.w, grid.areas.devices.h);
+    grid.layouts.devices = computeLayout(grid.devices.length, pedals.w, pedals.h);
     grid.layouts.ambsynth = computeLayout(grid.players.length, grid.areas.ambsynth.w, grid.areas.ambsynth.h);
 }
 
@@ -164,28 +199,31 @@ function drawDeviceCell(ctx, rect, device, now) {
     beginCell(ctx, rect, lighten(color, GRID.glowLighten * glow));
 
     const img = getImage(device.image);
+    const nameSize = Math.max(10, rect.w * GRID.nameSizeRatio);
+    const nameStrip = nameSize * GRID.nameStripRatio;
     ctx.save();
     ctx.globalAlpha = assignment ? 1 : GRID.idleImageAlpha;
     if (img) {
         // 90% of the cell width (60% for portrait photos), centered; shrink if
-        // a very tall photo would overflow.
+        // a tall photo would reach the name strip (kept clear top and bottom
+        // so the photo stays centered in the cell).
         const widthRatio = img.naturalHeight > img.naturalWidth
             ? GRID.tallImageWidthRatio
             : GRID.imageWidthRatio;
         const scale = Math.min(
             (rect.w * widthRatio) / img.naturalWidth,
-            (rect.h * GRID.imageWidthRatio) / img.naturalHeight
+            Math.min(rect.h * GRID.imageWidthRatio, rect.h - nameStrip * 2) / img.naturalHeight
         );
         const w = img.naturalWidth * scale;
         const h = img.naturalHeight * scale;
         ctx.drawImage(img, (rect.w - w) / 2, (rect.h - h) / 2, w, h);
-    } else {
-        ctx.fillStyle = ink;
-        ctx.font = `600 ${Math.max(10, rect.w * 0.09)}px ${FONT_STACK}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(device.name || 'Device', rect.w / 2, rect.h / 2, rect.w * GRID.imageWidthRatio);
     }
+    // Device name, centered at the top; shrinks to fit long names.
+    ctx.fillStyle = ink;
+    ctx.font = `600 ${nameSize}px ${FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(device.name || 'Device', rect.w / 2, nameStrip / 2, rect.w * GRID.imageWidthRatio);
     ctx.restore();
 
     if (assignment) {
@@ -222,6 +260,31 @@ function drawPlayerCell(ctx, rect, player, now) {
     ctx.restore();
 }
 
+// Webcam frame, cover-fitted into the rounded cell (rotated 180° when
+// flipped); a dimmed status line until frames arrive or if it failed.
+function drawCameraCell(ctx, rect) {
+    beginCell(ctx, rect, GRID.idleColor);
+    const video = grid.cameraVideo;
+    if (grid.cameraStream && video.readyState >= 2 && video.videoWidth > 0) {
+        const scale = Math.max(rect.w / video.videoWidth, rect.h / video.videoHeight);
+        const w = video.videoWidth * scale;
+        const h = video.videoHeight * scale;
+        if (grid.camera.flipped) {
+            ctx.translate(rect.w / 2, rect.h / 2);
+            ctx.rotate(Math.PI);
+            ctx.translate(-rect.w / 2, -rect.h / 2);
+        }
+        ctx.drawImage(video, (rect.w - w) / 2, (rect.h - h) / 2, w, h);
+    } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = `${Math.max(12, Math.round(rect.w * 0.03))}px ${FONT_STACK}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(grid.cameraError || 'Starting camera...', rect.w / 2, rect.h / 2, rect.w * 0.9);
+    }
+    ctx.restore();
+}
+
 // Small, discreet half title in the label strip.
 function drawLabel(ctx, area, text) {
     const labelH = grid.areas.labelH;
@@ -252,7 +315,7 @@ function render() {
     ctx.clearRect(0, 0, width, height);
 
     if (grid.socket && grid.socket.connected && grid.areas) {
-        const { devices: devArea, ambsynth: ambArea } = grid.areas;
+        const { devices: devArea, pedals: pedalArea, camera: cameraRect, ambsynth: ambArea } = grid.areas;
 
         // Hairline divider between the halves.
         ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
@@ -263,11 +326,13 @@ function render() {
 
         if (grid.layouts.devices) {
             grid.devices.forEach((device, index) => {
-                drawDeviceCell(ctx, cellRect(grid.layouts.devices, devArea, index), device, now);
+                drawDeviceCell(ctx, cellRect(grid.layouts.devices, pedalArea, index), device, now);
             });
         } else {
-            drawEmptyMessage(ctx, devArea, 'No devices configured');
+            drawEmptyMessage(ctx, pedalArea, 'No devices configured');
         }
+
+        if (cameraRect) drawCameraCell(ctx, cameraRect);
 
         if (grid.layouts.ambsynth) {
             grid.players.forEach((player, index) => {
@@ -337,8 +402,64 @@ qrOverlayEl.addEventListener('click', () => setQrOverlay(false));
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (e.key === 'q' || e.key === 'Q') setQrOverlay(!grid.qrVisible);
+    else if (e.key === 'c' || e.key === 'C') setCameraVisible(!grid.camera.visible);
     else if (e.key === 'Escape' && grid.qrVisible) setQrOverlay(false);
 });
+
+// --- camera ---------------------------------------------------------------------
+
+function setCameraVisible(visible) {
+    if (grid.socket && grid.socket.connected) {
+        grid.socket.emit('set-camera', { visible }); // server echoes the new state
+    }
+}
+
+async function startCamera() {
+    if (grid.cameraStream || grid.cameraStarting) return;
+    grid.cameraError = null;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        grid.cameraError = 'Camera unavailable (open the grid via localhost or https)';
+        return;
+    }
+    grid.cameraStarting = true;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        if (!grid.camera.visible) {
+            // Hidden again while the permission prompt / startup was pending.
+            stream.getTracks().forEach(track => track.stop());
+            return;
+        }
+        grid.cameraStream = stream;
+        grid.cameraVideo.srcObject = stream;
+        grid.cameraVideo.play().catch(() => {});
+    } catch (error) {
+        grid.cameraError = (error && error.name === 'NotAllowedError')
+            ? 'Camera permission denied'
+            : `Camera error: ${(error && error.message) || error}`;
+    } finally {
+        grid.cameraStarting = false;
+    }
+}
+
+// Releases the webcam entirely (its light goes off).
+function stopCamera() {
+    if (grid.cameraStream) {
+        grid.cameraStream.getTracks().forEach(track => track.stop());
+        grid.cameraStream = null;
+    }
+    grid.cameraVideo.srcObject = null;
+    grid.cameraError = null;
+}
+
+function onCameraUpdated(msg) {
+    grid.camera = { visible: Boolean(msg && msg.visible), flipped: Boolean(msg && msg.flipped) };
+    if (grid.camera.visible) startCamera();
+    else stopCamera();
+    updateLayout();
+}
 
 // --- socket -------------------------------------------------------------------
 
@@ -414,6 +535,7 @@ function initSocket() {
         grid.qrVisible = Boolean(msg && msg.visible);
         applyQrOverlay();
     });
+    grid.socket.on('camera-updated', onCameraUpdated);
     grid.socket.on('public-device-assignments-updated', onDevicesUpdated);
     grid.socket.on('device-activity', (msg) => {
         if (msg && msg.deviceId !== undefined && msg.deviceId !== null) {

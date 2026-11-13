@@ -965,6 +965,19 @@
         resizeCanvas();
       },
       hide() {
+        // Hiding (e.g. switching to a pedal) ends a held touch as if lifted,
+        // so the drone always fades with the normal release instead of
+        // hanging on if the browser never delivers the lift to the hidden
+        // canvas. A later lift event is ignored (no active pointer/touch).
+        if (activePointerId !== null && canvas.releasePointerCapture) {
+          try {
+            canvas.releasePointerCapture(activePointerId);
+          } catch (_e) {}
+        }
+        activePointerId = null;
+        activeTouchId = null;
+        isMouseDown = false;
+        endInteraction('hide');
         root.style.display = 'none';
       },
       setBackground,

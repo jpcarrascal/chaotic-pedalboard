@@ -67,10 +67,18 @@
           📱 Show QR Code
         </button>
 
+        <button id="camera-toggle" class="control-btn" title="Show/hide the webcam on the grid display (shortcut: c)">
+          📷 Show Camera
+        </button>
+
+        <button id="camera-flip" class="control-btn" title="Rotate the grid display's webcam image 180°">
+          🔃 Flip Camera
+        </button>
+
         <div id="view-controls">
           <div id="view-buttons">
-            <button id="device-config-toggle" class="control-btn" title="Configure MIDI devices">
-              ⚙️ Device Config
+            <button id="device-config-toggle" class="control-btn" title="Show/hide the track routing matrix">
+              🎵 Show Routing Matrix
             </button>
             <button id="info-toggle" class="control-btn" title="Show/hide device information">
               ℹ️ Interface Info
@@ -93,7 +101,6 @@
     <div id="device-config-panel" class="panel">
       <div class="panel-header">
         <h3>⚙️ Device Configuration</h3>
-        <button class="panel-close-btn" onclick="deviceConfig.toggleVisibility()">✕</button>
       </div>
       <p>Configure MIDI devices and their interface/channel assignments:</p>
       
@@ -107,6 +114,7 @@
         <table id="device-config-table">
           <thead>
             <tr>
+              <th class="order-col"></th>
               <th>Device</th>
               <th>User</th>
               <th>MIDI Interface</th>
@@ -172,7 +180,7 @@
     </div>
 
     <!-- Main Routing Matrix -->
-    <div id="routing-matrix">
+    <div id="routing-matrix" class="hidden">
       <h3>🎵 Track Routing Matrix</h3>
       
       <div id="matrix-container">

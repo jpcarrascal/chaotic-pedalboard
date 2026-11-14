@@ -434,9 +434,9 @@ body {
     }
     
     .discrete-option-btn.active {
-        background: #000000 !important;
-        border-color: #000000 !important;
-        color: #fff !important;
+        background: #ffffff !important;
+        border-color: #ffffff !important;
+        color: #000000 !important;
     }
 
 }
@@ -606,9 +606,9 @@ body {
     }
     
     .discrete-option-btn.active {
-        background: #000000 !important;
-        border-color: #000000 !important;
-        color: #fff !important;
+        background: #ffffff !important;
+        border-color: #ffffff !important;
+        color: #000000 !important;
     }
 
 }

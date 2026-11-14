@@ -4,6 +4,7 @@
     <title>Chaotic Pedalboard - Controller</title>
     <!-- <link rel="stylesheet" href="css/controller.css"> -->
     <link rel="stylesheet" href="css/routingMatrix.css">
+    <link rel="stylesheet" href="css/controller-dark.css">
     <link rel="stylesheet" href="css/color-transitions.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=0">
     <!-- Google tag (gtag.js) -->
@@ -21,93 +22,82 @@
     <div id="controls">
 
       <div id="session-info">
-        <span id="session-name">Session: <strong>-</strong></span>
-        <span id="session-status">Status: <strong class="session-status-badge session-status-not-ready">Not Ready</strong></span>
-        <span id="midi-status">MIDI: <strong>Loading...</strong></span>
-        <span id="queue-length">Queue: <strong>0</strong></span>
-        <span id="active-slots">Active Slots: <strong>0</strong></span>
-        <span id="next-in-queue">Next: <strong>---</strong></span>
+        <span class="status-item">Session <strong id="session-name">-</strong></span>
+        <span class="status-item" id="session-status"><strong class="session-status-badge session-status-not-ready">Not Ready</strong></span>
+        <span class="status-item">MIDI <strong id="midi-status">Loading...</strong></span>
+        <span class="status-item">Active <strong id="active-slots">0</strong></span>
+        <span class="status-item">Queue <strong id="queue-length">0</strong></span>
+        <span class="status-item">Next <strong id="next-in-queue">---</strong></span>
       </div>
 
-      <div id="session-controls">
-        <div id="session-buttons">
-          <button id="pause-button" class="control-btn mode-btn" title="Set session mode to Pause">
-            Pause
-          </button>
-          <button id="play-button" class="control-btn mode-btn" title="Set session mode to Play">
-            Play
-          </button>
-          <button id="takeover-button" class="control-btn mode-btn" title="Set session mode to Takeover">
-            Takeover
-          </button>
+      <div id="control-groups">
+        <div class="control-group">
+          <span class="group-label">Session</span>
+          <div class="group-row">
+            <div id="session-buttons" class="segmented">
+              <button id="pause-button" class="control-btn mode-btn" title="Set session mode to Pause">Pause</button>
+              <button id="play-button" class="control-btn mode-btn" title="Set session mode to Play">Play</button>
+              <button id="takeover-button" class="control-btn mode-btn" title="Set session mode to Takeover">Takeover</button>
+            </div>
+            <button id="panic-all" class="control-btn danger" title="Send panic (all notes off) to all devices">Panic all</button>
+          </div>
         </div>
 
-        <div id="slot-timer-controls">
-          <label for="slot-duration" id="slot-duration-label">Track Slot Time</label>
-          <input id="slot-duration" type="text" value="01:00" maxlength="5" placeholder="MM:SS" title="Set active time per track (MM:SS)">
-          <button id="slot-duration-apply" class="control-btn secondary" title="Apply slot time">
-            ⏱️ Apply
-          </button>
+        <div class="control-group">
+          <label class="group-label" for="slot-duration">Slot time</label>
+          <div class="group-row">
+            <input id="slot-duration" type="text" value="01:00" maxlength="5" placeholder="MM:SS" title="Set active time per track (MM:SS)">
+            <button id="slot-duration-apply" class="control-btn" title="Apply slot time">Apply</button>
+          </div>
         </div>
 
-        <div class="takeover-controls">
-          <div class="takeover-row">
-            <label for="takeover-fader">Master Fader</label>
+        <div class="control-group">
+          <label class="group-label" for="takeover-fader">Master fader</label>
+          <div class="group-row fader-row">
             <input type="range" id="takeover-fader" min="0" max="127" step="1" value="127" disabled>
             <span id="takeover-value">127</span>
           </div>
           <div id="takeover-hint" class="takeover-hint">Pause the session to enable Takeover.</div>
         </div>
 
-        <button id="panic-all" class="control-btn danger" title="Send panic (all notes off) to all devices">
-          🛑 Panic All
-        </button>
-
-        <button id="qr-overlay-toggle" class="control-btn" title="Show/hide the join QR code on the grid display (shortcut: q)">
-          📱 Show QR Code
-        </button>
-
-        <button id="camera-toggle" class="control-btn" title="Show/hide the webcam on the grid display (shortcut: c)">
-          📷 Show Camera
-        </button>
-
-        <button id="camera-flip" class="control-btn" title="Rotate the grid display's webcam image 180°">
-          🔃 Flip Camera
-        </button>
-
-        <div id="view-controls">
-          <div id="view-buttons">
-            <button id="device-config-toggle" class="control-btn" title="Show/hide the track routing matrix">
-              🎵 Show Routing Matrix
-            </button>
-            <button id="info-toggle" class="control-btn" title="Show/hide device information">
-              ℹ️ Interface Info
-            </button>
-            <button id="stats-toggle" class="control-btn" title="Show/hide routing statistics">
-              📊 Statistics
-            </button>
+        <div class="control-group">
+          <span class="group-label">Grid display</span>
+          <div class="group-row">
+            <button id="qr-overlay-toggle" class="control-btn" title="Show/hide the join QR code on the grid display (shortcut: q)">QR code</button>
+            <button id="camera-toggle" class="control-btn" title="Show/hide the webcam on the grid display (shortcut: c)">Camera</button>
+            <button id="camera-flip" class="control-btn" title="Rotate the grid display's webcam image 180°">Flip</button>
           </div>
-          <div id="page-links">
-            <a id="public-link" href="/public" target="_blank" rel="noopener">Public view ↗</a>
+        </div>
+
+        <div class="control-group">
+          <span class="group-label">Panels</span>
+          <div class="group-row">
+            <button id="device-config-toggle" class="control-btn" title="Show/hide the track routing matrix">Routing matrix</button>
+            <button id="info-toggle" class="control-btn" title="Show/hide MIDI interface information">Interfaces</button>
+            <button id="stats-toggle" class="control-btn" title="Show/hide routing statistics">Statistics</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <span class="group-label">Open</span>
+          <div id="page-links" class="group-row">
+            <a id="public-link" href="/public" target="_blank" rel="noopener">Public ↗</a>
             <a id="grid-link" href="/grid" target="_blank" rel="noopener">Grid ↗</a>
             <a id="testbed-link" href="/testbed" target="_blank" rel="noopener">Testbed ↗</a>
           </div>
         </div>
       </div>
-
     </div>
 
     <!-- Device Configuration Panel -->
     <div id="device-config-panel" class="panel">
       <div class="panel-header">
-        <h3>⚙️ Device Configuration</h3>
-      </div>
-      <p>Configure MIDI devices and their interface/channel assignments:</p>
-      
-      <div id="device-config-controls">
-        <button id="add-device-btn" class="control-btn">➕ Add New Device</button>
-        <button id="save-config-btn" class="control-btn success">📥 Download Configuration</button>
-        <button id="load-config-btn" class="control-btn">📁 Load Configuration</button>
+        <h3>Devices</h3>
+        <div id="device-config-controls">
+          <button id="add-device-btn" class="control-btn ghost">Add device</button>
+          <button id="save-config-btn" class="control-btn ghost">Download configuration</button>
+          <button id="load-config-btn" class="control-btn ghost">Load configuration</button>
+        </div>
       </div>
       
       <div id="device-config-container">
@@ -137,7 +127,7 @@
     <!-- Device Status Panel -->
     <div id="device-panel" class="panel hidden">
       <div class="panel-header">
-        <h3>📱 MIDI Interfaces</h3>
+        <h3>MIDI interfaces</h3>
         <button class="panel-close-btn" onclick="document.getElementById('device-panel').classList.add('hidden')">✕</button>
       </div>
       <div id="device-status">
@@ -149,7 +139,7 @@
     <!-- Statistics Panel -->
     <div id="stats-panel" class="panel hidden">
       <div class="panel-header">
-        <h3>📊 Routing Statistics</h3>
+        <h3>Routing statistics</h3>
         <button class="panel-close-btn" onclick="document.getElementById('stats-panel').classList.add('hidden')">✕</button>
       </div>
       <div id="stats-content">
@@ -181,7 +171,7 @@
 
     <!-- Main Routing Matrix -->
     <div id="routing-matrix" class="hidden">
-      <h3>🎵 Track Routing Matrix</h3>
+      <h3>Track routing matrix</h3>
       
       <div id="matrix-container">
         <table id="routing-table">
@@ -206,19 +196,20 @@
         </div>
       </div>
       
-      <!-- Always visible track URL section below the list -->
-      <div id="invite-section" class="invite-section">
-        <p>Share this URL with participants:</p>
-        <div id="track-url-display">
-          <code id="track-url">Loading...</code>
-          <button id="copy-url" title="Copy URL to clipboard">📋</button>
-        </div>
-        <div id="qr-base-url-controls">
-          <label for="qr-base-url-input">QR Base URL:</label>
-          <input id="qr-base-url-input" type="text" placeholder="https://your-host.example" autocomplete="off">
-          <button id="qr-base-url-apply" title="Apply QR Base URL">Apply</button>
-          <button id="qr-base-url-reset" title="Reset QR Base URL to the current host">Reset</button>
-        </div>
+    </div>
+
+    <!-- Invite: always visible -->
+    <div id="invite-section" class="invite-section">
+      <p class="group-label">Invite</p>
+      <div id="track-url-display">
+        <code id="track-url">Loading...</code>
+        <button id="copy-url" title="Copy URL to clipboard">Copy</button>
+      </div>
+      <div id="qr-base-url-controls">
+        <label for="qr-base-url-input">QR base URL</label>
+        <input id="qr-base-url-input" type="text" placeholder="https://your-host.example" autocomplete="off">
+        <button id="qr-base-url-apply" title="Apply QR Base URL">Apply</button>
+        <button id="qr-base-url-reset" title="Reset QR Base URL to the current host">Reset</button>
       </div>
     </div>
 
@@ -270,7 +261,7 @@
               <div id="controllers-container">
                 <!-- Controllers will be added dynamically -->
               </div>
-              <button type="button" id="add-controller-btn" class="control-btn small">➕ Add Controller</button>
+              <button type="button" id="add-controller-btn" class="control-btn small">Add controller</button>
             </div>
 
           </form>

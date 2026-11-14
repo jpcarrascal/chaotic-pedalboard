@@ -268,7 +268,7 @@ async function initializeMidi() {
         
         if (!midiSupported) {
             showError('Web MIDI API not supported in this browser');
-            app.elements.midiStatus.innerHTML = '<strong>Not Supported</strong>';
+            app.elements.midiStatus.textContent = 'Not supported';
             return;
         }
         
@@ -284,7 +284,7 @@ async function initializeMidi() {
         app.routingMatrix.setRoutingChangeCallback(onRoutingChange);
         
         // Update UI
-        app.elements.midiStatus.innerHTML = '<strong>Ready</strong>';
+        app.elements.midiStatus.textContent = 'Ready';
         updateDeviceList();
         
         console.log('MIDI system initialized successfully');
@@ -292,7 +292,7 @@ async function initializeMidi() {
     } catch (error) {
         console.error('Failed to initialize MIDI system:', error);
         showError('Failed to initialize MIDI system: ' + error.message);
-        app.elements.midiStatus.innerHTML = '<strong>Error</strong>';
+        app.elements.midiStatus.textContent = 'Error';
     }
 }
 
@@ -385,7 +385,7 @@ function updateSessionStatus() {
         }
     }
 
-    app.elements.sessionStatus.innerHTML = `Status: <strong class="session-status-badge ${statusClass}">${statusLabel}</strong>`;
+    app.elements.sessionStatus.innerHTML = `<strong class="session-status-badge ${statusClass}">${statusLabel}</strong>`;
 
     const buttons = [app.elements.pauseButton, app.elements.playButton, app.elements.takeoverButton];
     buttons.forEach((button) => {
@@ -438,7 +438,6 @@ function setupEventListeners() {
     app.elements.deviceConfigToggle.addEventListener('click', () => {
         const matrix = document.getElementById('routing-matrix');
         const visible = matrix.classList.toggle('hidden') === false;
-        app.elements.deviceConfigToggle.textContent = visible ? '🎵 Hide Routing Matrix' : '🎵 Show Routing Matrix';
         app.elements.deviceConfigToggle.classList.toggle('active', visible);
     });
     
@@ -775,13 +774,13 @@ function onQueueUpdated(data) {
         : '---';
 
     if (app.elements.queueLength) {
-        app.elements.queueLength.innerHTML = `Queue: <strong>${queueLength}</strong>`;
+        app.elements.queueLength.textContent = String(queueLength);
     }
     if (app.elements.activeSlots) {
-        app.elements.activeSlots.innerHTML = `Active Slots: <strong>${activeSlots}</strong>`;
+        app.elements.activeSlots.textContent = String(activeSlots);
     }
     if (app.elements.nextInQueue) {
-        app.elements.nextInQueue.innerHTML = `Next: <strong>${nextInitials}</strong>`;
+        app.elements.nextInQueue.textContent = nextInitials;
     }
 }
 
@@ -1046,9 +1045,9 @@ function onCopyUrl() {
     const url = app.elements.trackUrl.textContent;
     navigator.clipboard.writeText(url).then(() => {
         showInfo('URL copied to clipboard!');
-        app.elements.copyUrlButton.textContent = '✓';
+        app.elements.copyUrlButton.textContent = 'Copied';
         setTimeout(() => {
-            app.elements.copyUrlButton.textContent = '📋';
+            app.elements.copyUrlButton.textContent = 'Copy';
         }, 2000);
     }).catch(() => {
         showError('Failed to copy URL to clipboard');
@@ -1067,7 +1066,6 @@ function toggleQrOverlay() {
 
 function onQrOverlayUpdated(msg) {
     app.qrOverlayVisible = Boolean(msg && msg.visible);
-    app.elements.qrOverlayToggle.textContent = app.qrOverlayVisible ? '📱 Hide QR Code' : '📱 Show QR Code';
     app.elements.qrOverlayToggle.classList.toggle('active', app.qrOverlayVisible);
 }
 
@@ -1083,7 +1081,6 @@ function setCamera(change) {
 
 function onCameraUpdated(msg) {
     app.camera = { visible: Boolean(msg && msg.visible), flipped: Boolean(msg && msg.flipped) };
-    app.elements.cameraToggle.textContent = app.camera.visible ? '📷 Hide Camera' : '📷 Show Camera';
     app.elements.cameraToggle.classList.toggle('active', app.camera.visible);
     app.elements.cameraFlip.classList.toggle('active', app.camera.flipped);
 }
@@ -1116,11 +1113,11 @@ function updateDeviceList() {
     if (app.elements.deviceStatus) {
         if (status.supported) {
             app.elements.deviceStatus.innerHTML = `
-                <div>✅ Web MIDI supported - ${status.connectedOutputs} of ${status.outputCount} devices connected</div>
+                <div>Web MIDI supported: ${status.connectedOutputs} of ${status.outputCount} devices connected</div>
             `;
         } else {
             app.elements.deviceStatus.innerHTML = `
-                <div>❌ Web MIDI not supported in this browser</div>
+                <div>Web MIDI is not supported in this browser</div>
             `;
         }
     }

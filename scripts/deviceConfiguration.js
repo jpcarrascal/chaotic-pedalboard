@@ -408,7 +408,7 @@ class DeviceConfiguration {
         if (this.elements.addControllerBtn) {
             this.elements.addControllerBtn.disabled = this.currentControllerCount >= config.MAX_CONTROLLERS_PER_DEVICE;
             this.elements.addControllerBtn.textContent = 
-                this.currentControllerCount >= config.MAX_CONTROLLERS_PER_DEVICE ? '✓ Maximum Controllers Added' : '➕ Add Controller';
+                this.currentControllerCount >= config.MAX_CONTROLLERS_PER_DEVICE ? 'Maximum controllers added' : 'Add controller';
         }
     }
 
@@ -726,11 +726,11 @@ class DeviceConfiguration {
                     <span class="status-badge status-${device.status}">${this.getStatusLabel(device.status)}</span>
                 </td>
                 <td>
-                    <button class="control-btn small" onclick="deviceConfig.showControllerSetup(${device.id})" title="Edit MIDI controllers">
-                        ⚙️ Edit
+                    <button class="control-btn small ghost" onclick="deviceConfig.showControllerSetup(${device.id})" title="Edit MIDI controllers">
+                        Edit
                     </button>
                     <button class="control-btn small danger" onclick="deviceConfig.confirmRemoveDevice(${device.id})" title="Remove device">
-                        🗑️ Remove
+                        Remove
                     </button>
                 </td>
             </tr>

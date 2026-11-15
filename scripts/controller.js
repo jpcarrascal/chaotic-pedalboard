@@ -754,7 +754,7 @@ function onDeviceAssignmentsUpdated(data) {
     
     // Update device configuration table to show assigned users
     if (deviceConfig) {
-        deviceConfig.updateAssignedUsers(app.deviceAssignments);
+        deviceConfig.updateAssignedUsers(app.deviceAssignments, data.inactiveDeviceIds);
     }
 
     updateRoutingMatrix();

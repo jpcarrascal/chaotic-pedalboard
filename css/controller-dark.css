@@ -356,6 +356,9 @@ select:focus-visible {
 #device-config-table tr:hover,
 #routing-table tr:hover { background: rgba(255, 255, 255, 0.02); }
 
+/* Device switched off for this session: dim all but the actions cell. */
+#device-config-table tr.device-inactive td:not(:last-child) { opacity: 0.35; }
+
 #device-config-table .user-cell,
 #device-config-table .user-cell strong,
 .device-name-cell strong { color: var(--fg); }

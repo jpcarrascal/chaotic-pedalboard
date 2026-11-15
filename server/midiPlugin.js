@@ -43,8 +43,22 @@ function clearAssignment(session, slot) {
     delete getAssignments(session)[slot];
 }
 
+// Devices the host switched off for this session (e.g. a pedal being power
+// cycled). Session-only: never part of the saved device configuration.
+function getInactiveDeviceIds(session) {
+    return session.getAttribute('inactiveDeviceIds');
+}
+
+function isDeviceActive(session, deviceId) {
+    return !getInactiveDeviceIds(session).includes(deviceId);
+}
+
+function getActiveDevices(session) {
+    return getConfiguredDevices(session).filter(device => isDeviceActive(session, device.id));
+}
+
 function getRandomUnassignedDevice(session) {
-    const devices = getConfiguredDevices(session);
+    const devices = getActiveDevices(session);
     if (devices.length === 0) return null;
 
     const assignedIds = Object.values(getAssignments(session)).map(a => a.deviceId);
@@ -65,6 +79,8 @@ function setConfiguredDevices(session, devices) {
             delete assignments[slot];
         }
     }
+    session.setAttribute('inactiveDeviceIds',
+        getInactiveDeviceIds(session).filter(id => validIds.has(id)));
     const validKeys = new Set((devices || []).map(device => String(device.id)));
     const runtimeStates = getRuntimeStates(session);
     for (const key of Object.keys(runtimeStates)) {
@@ -187,10 +203,11 @@ function getSessionMode(session) {
 
 function emitDeviceAssignments(ctx, session) {
     ctx.emitToHost(session, 'device-assignments-updated', {
-        assignments: getAssignments(session)
+        assignments: getAssignments(session),
+        inactiveDeviceIds: getInactiveDeviceIds(session)
     });
     ctx.emitToRole(session.name, 'public', 'public-device-assignments-updated', {
-        configuredDevices: getConfiguredDevices(session),
+        configuredDevices: getActiveDevices(session), // displays hide inactive pedals
         assignments: getAssignments(session)
     });
 }
@@ -261,7 +278,7 @@ function emitDeviceActivity(ctx, session, deviceId) {
 
 function emitPublicSnapshot(ctx, session, socketID) {
     ctx.io.to(socketID).emit('public-session-snapshot', {
-        configuredDevices: getConfiguredDevices(session),
+        configuredDevices: getActiveDevices(session),
         assignments: getAssignments(session),
         queue: session.queue.snapshot(),
         length: session.queue.length(),
@@ -301,6 +318,7 @@ function syncDeviceAssignmentFromHostMessage(session, msg) {
 module.exports = function midiPlugin(ctx) {
     ctx.defineAttributes({
         configuredDevices: [],
+        inactiveDeviceIds: [],   // device ids switched off by the host for this session
         deviceAssignments: {},   // slot -> { deviceId, deviceName, userInitials, userColor }
         deviceRuntimeStates: {}, // deviceId -> { controllers: {"cc:<n>": value}, updatedAt }
         takeover: { enabled: false, value: 127 },
@@ -495,6 +513,32 @@ module.exports = function midiPlugin(ctx) {
         emitDeviceAssignments(ctx, session);
         emitRuntimeDiagnostics(ctx, session);
         ctx.turnTaking.tryPromote(session.name); // new devices may unblock the queue
+    });
+
+    // Host switches a device off/on for this session (e.g. a hung pedal that
+    // needs a power cycle). Its participant goes back in line exactly as if
+    // their time had run out; reactivating lets the line fill it again.
+    ctx.on('set-device-active', (socket, session, msg) => {
+        if (!ctx.requireHost(socket, session)) return;
+        const deviceId = msg ? msg.deviceId : undefined;
+        if (!getConfiguredDevices(session).some(device => device.id === deviceId)) return;
+
+        const active = Boolean(msg.active);
+        const others = getInactiveDeviceIds(session).filter(id => id !== deviceId);
+        session.setAttribute('inactiveDeviceIds', active ? others : [...others, deviceId]);
+
+        if (!active) {
+            const assignments = getAssignments(session);
+            const slot = Object.keys(assignments).find(s => assignments[s].deviceId === deviceId);
+            const participant = slot !== undefined ? session.participants.get(parseInt(slot, 10)) : null;
+            if (participant) {
+                ctx.turnTaking.evict(session.name, session, participant.socketID,
+                    'This pedal is temporarily unavailable. You have been moved to the line.');
+            }
+        }
+
+        emitDeviceAssignments(ctx, session);
+        if (active) ctx.turnTaking.tryPromote(session.name);
     });
 
     ctx.on('set-takeover-state', (socket, session, msg) => {

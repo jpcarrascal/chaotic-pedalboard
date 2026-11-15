@@ -10,7 +10,8 @@ class DeviceConfiguration {
         this.availablePedalImages = []; // From /images/pedals
         this.nextDeviceId = 1; // Auto-increment ID for new devices
         this.deviceAssignments = {}; // Maps trackNumber -> {deviceId, deviceName, userInitials}
-        
+        this.inactiveDeviceIds = []; // Session-only, owned by the server (not saved in config)
+
         this.elements = {
             configPanel: null,
             configTable: null,
@@ -684,9 +685,10 @@ class DeviceConfiguration {
             const userColor = this.getAssignedUserColorForDevice(device.id);
             const userSwatch = userColor ? `<span class="user-color-swatch" style="background-color: ${userColor};"></span>` : '';
             const userDisplay = assignedUser ? `${userSwatch}<strong>${assignedUser}</strong>` : '<em>---</em>';
-            
+            const isActive = !this.inactiveDeviceIds.includes(device.id);
+
             return `
-            <tr data-device-id="${device.id}">
+            <tr data-device-id="${device.id}" class="${isActive ? '' : 'device-inactive'}">
                 <td class="order-col">
                     <button class="control-btn order-btn" onclick="deviceConfig.moveDevice(${device.id}, -1)" title="Move up" ${index === 0 ? 'disabled' : ''}>▲</button>
                     <button class="control-btn order-btn" onclick="deviceConfig.moveDevice(${device.id}, 1)" title="Move down" ${index === lastIndex ? 'disabled' : ''}>▼</button>
@@ -726,6 +728,9 @@ class DeviceConfiguration {
                     <span class="status-badge status-${device.status}">${this.getStatusLabel(device.status)}</span>
                 </td>
                 <td>
+                    <button class="control-btn small ${isActive ? 'active' : 'ghost'}" onclick="deviceConfig.setDeviceActive(${device.id}, ${!isActive})" title="${isActive ? 'Deactivate device for this session' : 'Reactivate device'}">
+                        Active
+                    </button>
                     <button class="control-btn small ghost" onclick="deviceConfig.showControllerSetup(${device.id})" title="Edit MIDI controllers">
                         Edit
                     </button>
@@ -859,8 +864,19 @@ class DeviceConfiguration {
     /**
      * Update assigned users display in device configuration table
      */
-    updateAssignedUsers(assignments) {
+    /**
+     * Ask the server to switch a device on/off for this session. The server
+     * evicts its participant if needed and echoes the new inactive list.
+     */
+    setDeviceActive(deviceId, active) {
+        const socket = window.app && window.app.socket;
+        if (!socket || !socket.connected) return;
+        socket.emit('set-device-active', { deviceId, active });
+    }
+
+    updateAssignedUsers(assignments, inactiveDeviceIds) {
         this.deviceAssignments = assignments || {};
+        this.inactiveDeviceIds = inactiveDeviceIds || [];
         console.log('Updating device table with assignments:', this.deviceAssignments);
         
         // Update the configuration table to reflect new assignments

@@ -456,6 +456,53 @@ describe('chaotic-pedalboard server', () => {
         expect(await upPromise).toEqual({ socketID: track.id, phase: 'up', x: 0.5, y: 0.5, short: true });
     });
 
+    test('inactive device is never assigned and is hidden from displays', async () => {
+        const host = await setupHostWithDevices('s30');
+
+        const hostUpdate = waitForMatch(host, 'device-assignments-updated',
+            msg => Array.isArray(msg.inactiveDeviceIds) && msg.inactiveDeviceIds.includes(1));
+        host.emit('set-device-active', { deviceId: 1, active: false });
+        await hostUpdate;
+
+        const display = connect({ role: 'public', session: 's30' });
+        const snapshot = await waitFor(display, 'public-session-snapshot');
+        expect(snapshot.configuredDevices.map(d => d.id)).toEqual([2]);
+
+        const t1 = connect({ role: 'participant', session: 's30', initials: 'T1' });
+        expect((await waitFor(t1, 'track-assignment')).device.name).toBe('Pedal B');
+
+        const t2 = connect({ role: 'participant', session: 's30', initials: 'T2' });
+        expect((await waitFor(t2, 'queue-status')).position).toBe(1); // Pedal A is off
+    });
+
+    test('deactivating an in-use device sends its participant to the line; reactivating refills it', async () => {
+        const host = await setupHostWithDevices('s31', [DEVICES[0]]);
+
+        const t1 = connect({ role: 'participant', session: 's31', initials: 'T1' });
+        await waitFor(t1, 'track-assignment');
+        const t2 = connect({ role: 'participant', session: 's31', initials: 'T2' });
+        await waitFor(t2, 'queue-status');
+
+        const display = connect({ role: 'public', session: 's31' });
+        await waitFor(display, 'public-session-snapshot');
+
+        const expiredPromise = waitFor(t1, 'slot-expired');
+        const displayUpdate = waitForMatch(display, 'public-device-assignments-updated',
+            msg => msg.configuredDevices.length === 0);
+        const hostUpdate = waitForMatch(host, 'device-assignments-updated',
+            msg => Object.keys(msg.assignments).length === 0 && msg.inactiveDeviceIds.includes(1));
+        host.emit('set-device-active', { deviceId: 1, active: false });
+
+        expect((await expiredPromise).reason).toMatch(/temporarily unavailable/);
+        await displayUpdate;
+        await hostUpdate;
+
+        // Reactivate: the head of the line (T2, waiting before T1) gets the pedal.
+        const promoted = waitFor(t2, 'track-assignment');
+        host.emit('set-device-active', { deviceId: 1, active: true });
+        expect((await promoted).device.name).toBe('Pedal A');
+    });
+
     test('pedal images API serves the catalog', async () => {
         const response = await fetch(`http://localhost:${port}/api/pedal-images`);
         const body = await response.json();

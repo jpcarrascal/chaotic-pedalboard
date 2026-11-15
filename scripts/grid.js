@@ -9,6 +9,9 @@
 //  - Camera: when enabled from the controller (or 'c'), the bottom band of the
 //    devices half shows this machine's default webcam as a 16:9 cell; pedals
 //    re-flow into the space above it.
+//  - With no ambsynth players, the devices take the whole screen: the
+//    ambsynth half slides out to the right while each pedal cell glides to
+//    its new place (and back when the first player shows up).
 
 const GRID = {
     cellAspect: 9 / 16,      // width / height
@@ -26,7 +29,9 @@ const GRID = {
     glowLighten: 0.30,       // pedal cell lightens this much toward white on activity...
     glowFadeMs: 300,         // ...and fades back over this long after the last message
     cameraBandRatio: 0.4,    // share of the devices half's height given to the camera
-    cameraAspect: 16 / 9     // camera cell width / height (webcam native)
+    cameraAspect: 16 / 9,    // camera cell width / height (webcam native)
+    splitAnimMs: 800,        // devices full-screen <-> split transition
+    collapseDelayMs: 3000    // wait this long with no players before going full-screen
 };
 
 const grid = {
@@ -39,8 +44,10 @@ const grid = {
     players: [],                 // [{ socketID, initials, color, ink }]
     touches: new Map(),          // socketID -> { x, y } while touching (circle + crosshair)
     ripples: new Map(),          // socketID -> [{ x, y, startedAt }] after lift (overlap)
-    areas: null,                 // { devices, pedals, camera, ambsynth, labelH }
-    layouts: { devices: null, ambsynth: null },
+    showAmbsynth: false,         // split view (true) or devices full-screen (false, the default)
+    collapseTimer: null,         // pending switch to full-screen devices
+    frame: { from: null, to: null, startedAt: 0 }, // layout frames; 'from' set while animating
+    ambsynthLayout: null,
     qrBaseUrl: null,             // from the controller's QR Base URL setting
     qrVisible: false,            // join QR overlay (server-held, shared with the controller)
     qrRenderedFor: null,         // join URL the current QR image encodes
@@ -90,12 +97,14 @@ function cellRect(layout, area, index) {
     };
 }
 
-function updateLayout() {
+// Concrete rects for one layout state: split (withAmbsynth) or devices only.
+// `amb` is the ambsynth half's visibility (1 shown, 0 slid out).
+function buildFrame(withAmbsynth) {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const labelH = Math.max(GRID.labelMinPx, Math.round(height * GRID.labelRatio));
     const half = width / 2;
-    const devices = { x: 0, y: labelH, w: half, h: height - labelH };
+    const devices = { x: 0, y: labelH, w: withAmbsynth ? half : width, h: height - labelH };
     let pedals = devices;
     let camera = null;
     if (grid.camera.visible) {
@@ -116,15 +125,91 @@ function updateLayout() {
             };
         }
     }
-    grid.areas = {
+    const layout = computeLayout(grid.devices.length, pedals.w, pedals.h);
+    return {
         labelH,
         devices,
         pedals,
         camera,
-        ambsynth: { x: half, y: labelH, w: width - half, h: height - labelH }
+        deviceRects: layout ? grid.devices.map((_, index) => cellRect(layout, pedals, index)) : [],
+        amb: withAmbsynth ? 1 : 0
     };
-    grid.layouts.devices = computeLayout(grid.devices.length, pedals.w, pedals.h);
-    grid.layouts.ambsynth = computeLayout(grid.players.length, grid.areas.ambsynth.w, grid.areas.ambsynth.h);
+}
+
+function ambsynthArea() {
+    const labelH = Math.max(GRID.labelMinPx, Math.round(window.innerHeight * GRID.labelRatio));
+    const half = window.innerWidth / 2;
+    return { x: half, y: labelH, w: window.innerWidth - half, h: window.innerHeight - labelH };
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function lerpRect(a, b, t) {
+    if (!a || !b) return b || null;
+    return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), w: lerp(a.w, b.w, t), h: lerp(a.h, b.h, t) };
+}
+
+function easeInOut(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// The frame to draw now: the target, or an eased blend while animating.
+function currentFrame(now) {
+    const { from, to, startedAt } = grid.frame;
+    if (!from || !to) return to;
+    const raw = (now - startedAt) / GRID.splitAnimMs;
+    if (raw >= 1) {
+        grid.frame.from = null;
+        return to;
+    }
+    const t = easeInOut(Math.max(0, raw));
+    return {
+        labelH: to.labelH,
+        devices: lerpRect(from.devices, to.devices, t),
+        pedals: lerpRect(from.pedals, to.pedals, t),
+        camera: lerpRect(from.camera, to.camera, t),
+        deviceRects: to.deviceRects.map((rect, i) => lerpRect(from.deviceRects[i], rect, t)),
+        amb: lerp(from.amb, to.amb, t)
+    };
+}
+
+// Recompute the target for content/size changes. These apply instantly,
+// except that a running split animation keeps going toward the new target
+// when the pedal count is unchanged.
+function updateLayout() {
+    const to = buildFrame(grid.showAmbsynth);
+    const { from } = grid.frame;
+    if (from && from.deviceRects.length !== to.deviceRects.length) grid.frame.from = null;
+    grid.frame.to = to;
+    const amb = ambsynthArea();
+    grid.ambsynthLayout = computeLayout(grid.players.length, amb.w, amb.h);
+}
+
+// Animate between split and full-screen devices, starting from whatever is
+// on screen right now (so a reversal mid-animation never snaps).
+function setShowAmbsynth(show) {
+    if (grid.showAmbsynth === show) return;
+    const now = performance.now();
+    const from = currentFrame(now);
+    grid.showAmbsynth = show;
+    updateLayout();
+    grid.frame.from = from;
+    grid.frame.startedAt = now;
+}
+
+// Expand back to the split immediately when a player appears; wait a bit
+// before going full-screen so a short line doesn't flip the screen back and forth.
+function updateAmbsynthVisibility() {
+    if (grid.players.length > 0) {
+        clearTimeout(grid.collapseTimer);
+        grid.collapseTimer = null;
+        setShowAmbsynth(true);
+    } else if (grid.showAmbsynth && !grid.collapseTimer) {
+        grid.collapseTimer = setTimeout(() => {
+            grid.collapseTimer = null;
+            if (grid.players.length === 0) setShowAmbsynth(false);
+        }, GRID.collapseDelayMs);
+    }
 }
 
 function resizeCanvas() {
@@ -287,7 +372,7 @@ function drawCameraCell(ctx, rect) {
 
 // Small, discreet half title in the label strip.
 function drawLabel(ctx, area, text) {
-    const labelH = grid.areas.labelH;
+    const labelH = grid.frame.to.labelH;
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.font = `600 ${Math.round(labelH * 0.55)}px ${FONT_STACK}`;
@@ -314,19 +399,15 @@ function render() {
     const height = window.innerHeight;
     ctx.clearRect(0, 0, width, height);
 
-    if (grid.socket && grid.socket.connected && grid.areas) {
-        const { devices: devArea, pedals: pedalArea, camera: cameraRect, ambsynth: ambArea } = grid.areas;
-
-        // Hairline divider between the halves.
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-        ctx.fillRect(Math.round(ambArea.x), 0, 1, height);
+    const frame = grid.frame.to ? currentFrame(now) : null;
+    if (grid.socket && grid.socket.connected && frame) {
+        const { devices: devArea, pedals: pedalArea, camera: cameraRect, deviceRects, amb } = frame;
 
         drawLabel(ctx, devArea, 'Devices');
-        drawLabel(ctx, ambArea, 'Ambient synth');
 
-        if (grid.layouts.devices) {
+        if (deviceRects.length) {
             grid.devices.forEach((device, index) => {
-                drawDeviceCell(ctx, cellRect(grid.layouts.devices, pedalArea, index), device, now);
+                if (deviceRects[index]) drawDeviceCell(ctx, deviceRects[index], device, now);
             });
         } else {
             drawEmptyMessage(ctx, pedalArea, 'No devices configured');
@@ -334,12 +415,26 @@ function render() {
 
         if (cameraRect) drawCameraCell(ctx, cameraRect);
 
-        if (grid.layouts.ambsynth) {
-            grid.players.forEach((player, index) => {
-                drawPlayerCell(ctx, cellRect(grid.layouts.ambsynth, ambArea, index), player, now);
-            });
-        } else {
-            drawEmptyMessage(ctx, ambArea, 'Waiting for Ambient Synth players...');
+        // Ambsynth half: slides out to the right and fades as amb -> 0.
+        if (amb > 0) {
+            const ambArea = ambsynthArea();
+            ctx.save();
+            ctx.globalAlpha = amb;
+            ctx.translate((1 - amb) * ambArea.w, 0);
+
+            // Hairline divider between the halves.
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.fillRect(Math.round(ambArea.x), 0, 1, height);
+            drawLabel(ctx, ambArea, 'Ambient synth');
+
+            if (grid.ambsynthLayout) {
+                grid.players.forEach((player, index) => {
+                    drawPlayerCell(ctx, cellRect(grid.ambsynthLayout, ambArea, index), player, now);
+                });
+            } else {
+                drawEmptyMessage(ctx, ambArea, 'Waiting for Ambient Synth players...');
+            }
+            ctx.restore();
         }
     }
     requestAnimationFrame(render);
@@ -493,6 +588,7 @@ function onPlayersUpdated(msg) {
         if (!present.has(socketID)) grid.ripples.delete(socketID);
     }
     updateLayout();
+    updateAmbsynthVisibility();
 }
 
 function onTouch(msg) {
